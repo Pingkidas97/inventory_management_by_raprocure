@@ -466,6 +466,7 @@
             const productLifeCycleUrl ="{{ route('buyer.productLifeCycle') }}";
             const genarateWorkOrderURL = "{{ route('buyer.workOrder.store') }}";
             const genarateforceClosureURL = "{{ route('buyer.forceClosure.store') }}";
+            const workorderusercurrency = "{{ route('buyer.workOrder.userCurrency') }}";
         </script>
 
         <script>

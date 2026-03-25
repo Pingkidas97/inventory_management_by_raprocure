@@ -155,7 +155,8 @@
                     $buyer_id=$order->buyer_id;
                     $buyer_user_id=$order->buyer_user_id;
                     $companyId=$buyer_id;
-                    $companyId = (auth()->user()->parent_id != 0) ? auth()->user()->parent_id : auth()->user()->id;
+
+                    // $companyId = (auth()->user()->parent_id != 0) ? auth()->user()->parent_id : auth()->user()->id;
                     $company = \App\Models\User::where('id', $companyId)->with('buyer')->first();
                     $logo = ($company && isset($company->logo) && !empty($company->logo)) ? $company->logo : null;
                     $base64 = null;
@@ -245,21 +246,21 @@
                             <strong>Order Date:</strong> {{ optional($order->created_at)->format('d/m/Y') ?? ' ' }}
                         </td>
                     </tr>
-                    <tr>
+                    <!--<tr>
                         <td>
                             <strong>Delivery Period:</strong> {{ $order->order_delivery_period ?? ' ' }} Days
                         </td>
-                    </tr>
+                    </tr>-->
                     <tr>
                         <td>
                             <strong>Payment Term:</strong> {{ $order->order_payment_term ?? ' ' }}
                         </td>
                     </tr>
-                    <tr>
+                    <!--<tr>
                         <td>
                             <strong>Price Basis:</strong> {{ $order->order_price_basis ?? ' ' }}
                         </td>
-                    </tr>
+                    </tr>-->
                 </table>
             </td>
 
@@ -338,7 +339,7 @@
                             <strong>Buyer Name:</strong> {{ optional($company->buyer)->legal_name ?? 'UNKNOWN BUYER' }}
                             @php
                                 $firstProduct = optional($order->products)->first();
-                                $orderBranch = optional($firstProduct->inventory)->branch;
+                                $orderBranch = $order->branch;
                             @endphp
                         </td>
                     </tr>
@@ -392,24 +393,7 @@
             </td>
 
         </tr>
-        <tr>
-            <td colspan="2">
-                <h4 class="section-title">
-                    @php
-                        $division = $firstProduct->product->division?->division_name;
-                        $category = $firstProduct->product->category?->category_name;
-                    @endphp
-
-                    @if($division && $category)
-                        {{ $division }} &gt; {{ $category }}
-                    @elseif($division)
-                        {{ $division }}
-                    @elseif($category)
-                        {{ $category }}
-                    @endif
-                </h4>
-            </td>
-        </tr>
+        
     </table>
 
     <table class="product-table">
@@ -417,68 +401,105 @@
             <tr>
                 <th class="text-wrap keep-word" style="width: 5%;">S.No</th>
                 <th class="text-wrap keep-word" style="width: 18%;">Product Description</th>
-                <th class="text-wrap keep-word">Quantity</th>
-                <th class="text-wrap keep-word">UOM</th>
+                <!--<th class="text-wrap keep-word">Quantity</th>
+                <th class="text-wrap keep-word">UOM</th>-->
                 <th class="text-wrap keep-word">Price ({{$currency == 'रु' ? 'NPR' : $currency}})</th>
                 <th class="text-wrap keep-word">MRP ({{$currency == 'रु' ? 'NPR' : $currency}})</th>
                 <th class="text-wrap keep-word">DISC. (%)</th>
-                <th class="text-wrap keep-word">HSN Code</th>
+                <!--<th class="text-wrap keep-word">HSN Code</th>-->
                 <th class="text-wrap keep-word">GST %</th>
                 <th class="text-wrap keep-word" style="width: 15%;">Total Amount ({{$currency == 'रु' ? 'NPR' : $currency}})</th>
             </tr>
         </thead>
         <tbody>
-             @php  $totalAmount=0; @endphp
-                    @foreach($order->products as $key => $product)
-                            @php
-                                $formatted_rate=NumberFormatterHelper::formatCurrencyPDF($product->product_price,$currency);
-                                $formatted_rate = str_contains($formatted_rate, '.') ? $formatted_rate : $formatted_rate . '.00';
-                                $formatted_mrp = $product->product_mrp === null ? '' : (str_contains(NumberFormatterHelper::formatCurrencyPDF($product->product_mrp, $currency), '.') ? NumberFormatterHelper::formatCurrencyPDF($product->product_mrp, $currency) : NumberFormatterHelper::formatCurrencyPDF($product->product_mrp, $currency) . '.00');
-                                $hsnCode = DB::table('vendor_products')->where('product_id', $product->product_id)->where('vendor_id', $order->vendor_id)->value('hsn_code');
-                            @endphp
-                        <tr class="highlight" >
-                            <td>{{ $key + 1 }}</td>
-                            <td style="word-wrap: break-word; white-space: normal; text-align: left;">
-                                {{ $product->product->product_name }}
-                                {!! $product->inventory->specification ? ' - ' . cleanInvisibleCharacters($product->inventory->specification) : '' !!}
-                                {!! $product->inventory->size ? ' - ' . cleanInvisibleCharacters($product->inventory->size) : '' !!}
-                            </td>
-                            <td style="white-space: nowrap;">{{NumberFormatterHelper::formatQty($product->product_quantity,$currency)}}</td>
-                            <td>{{ $product->inventory->uom->uom_name }}</td>
-                            <td style="white-space: nowrap;">{{$currency == 'रु' ? 'NPR ' : $currency}}{{$formatted_rate}}</td>
-                            <td style="white-space: nowrap;">{{ $formatted_mrp !== '' ? ($currency == 'रु' ? 'NPR ' : $currency) . $formatted_mrp : '' }}</td>
-                            <td style="white-space: nowrap;">{{$product->product_disc !== null ? NumberFormatterHelper::formatCurrencyPDF($product->product_disc, $currency).' %' : ''}}</td>
-                            <td>{{ $hsnCode ?? '' }}</td>
-                            <td style="white-space: nowrap;">{{ $product->tax->tax ?? '0' }} %</td>
-                            <td style="white-space: nowrap;">
-                                @php
-                                    $price = $product->product_price;
-                                    $qty = $product->product_quantity;
-                                    $taxPercent = floatval($product->tax->tax ?? 0);
-                                    $qty = $qty == 0 ? 1 : $qty;
-                                    $subtotal = $price * $qty;
-                                    $gstAmount = $subtotal * ($taxPercent / 100);
-                                    $totalWithGst = $subtotal + $gstAmount;
-                                    $totalAmount+= $totalWithGst;
+             @php $totalAmount = 0; @endphp
 
-                                    $formatted_totalWithGst = NumberFormatterHelper::formatCurrencyPDF($totalWithGst,$currency);
-                                    $formatted_totalWithGst = str_contains($formatted_totalWithGst, '.') ? $formatted_totalWithGst : $formatted_totalWithGst . '.00';
-                                @endphp
-                                {{$currency == 'रु' ? 'NPR ' : $currency}}{{$formatted_totalWithGst}}</td>
-                        </tr>
-                    @endforeach
+            @foreach($order->products as $key => $product)
+
+                @php
+                    $qty = $product->product_quantity ?? 1;
+                    $qty = $qty == 0 ? 1 : $qty;
+
+                    $price = $product->product_price ?? 0;
+                    $gstPercent =  optional($product->tax)->tax ?? 0;
+                    $subtotal = $price * $qty;
+                    $gstAmount = ($subtotal * $gstPercent) / 100;
+                    $totalWithGst = $subtotal + $gstAmount;
+
+                    $totalAmount += $totalWithGst;
+
+                    $formatted_price = NumberFormatterHelper::formatCurrencyPDF($price, $currency);
+                    $formatted_total = NumberFormatterHelper::formatCurrencyPDF($totalWithGst, $currency);
+                @endphp
+                @php
+                if (!function_exists('addLineBreaks')) {
+                    function addLineBreaks($text, $limit = 20) {
+                        $words = explode(' ', $text);
+                        $line = '';
+                        $result = '';
+
+                        foreach ($words as $word) {
+                            if (strlen($line . $word) > $limit) {
+                                $result .= trim($line) . '<br>';
+                                $line = '';
+                            }
+                            $line .= $word . ' ';
+                        }
+
+                        $result .= trim($line);
+                        return $result;
+                    }
+                }
+                @endphp
+
+                
+                <tr>
+                    <td>{{ $key + 1 }}</td>
+
+                    <!-- DESCRIPTION -->
+                    <td style="text-align:left; word-wrap: normal;">
+                        {!! addLineBreaks($product->product_description) !!}
+                    </td>
+                    <!-- PRICE -->
+                    <td>{{ $currency == 'रु' ? 'NPR ' : $currency }}{{ $formatted_price }}</td>
+
+                    <!-- MRP -->
+                    <td>
+                        @if($product->product_mrp)
+                            {{ $currency == 'रु' ? 'NPR ' : $currency }}
+                            {{ NumberFormatterHelper::formatCurrencyPDF($product->product_mrp, $currency) }}
+                        @endif
+                    </td>
+
+                    <!-- DISCOUNT -->
+                    <td>
+                        {{ $product->product_disc ? NumberFormatterHelper::formatCurrencyPDF($product->product_disc, $currency).' %' : '' }}
+                    </td>
+
+                    
+
+                    <!-- GST -->
+                    <td>{{ optional($product->tax)->tax ?? 0 }} %</td>
+                    <!-- TOTAL -->
+                    <td>
+                        {{ $currency == 'रु' ? 'NPR ' : $currency }}
+                        {{ $formatted_total }}
+                    </td>
+                </tr>
+
+            @endforeach
 
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="9" class="total-label">Total:</td>
+                <td colspan="6" class="total-label">Total:</td>
                 @php
-                $formatted_totalAmount=NumberFormatterHelper::formatCurrencyPDF($totalAmount,$currency);
-                $formatted = str_contains($formatted_totalAmount, '.') ? $formatted_totalAmount : $formatted_totalAmount . '.00';
+                $formatted_totalAmount = NumberFormatterHelper::formatCurrencyPDF($totalAmount, $currency);
                 @endphp
 
-                <td class="total-value">{{$currency == 'रु' ? 'NPR ' : $currency}}
-                    {{$formatted}}</td>
+                <td class="total-value">
+                    {{ $currency == 'रु' ? 'NPR ' : $currency }} {{ $formatted_totalAmount }}
+                </td>
             </tr>
         </tfoot>
     </table>
@@ -487,7 +508,7 @@
         Amount In Words: {{ CurrencyConvertHelper::numberToWordsWithCurrency($totalAmount, $currency) }}
     </div>
     <div class="order-generated" >
-        <p><strong>ORDER GENERATED THROUGH</strong></p>
+        <p><strong>WORK ORDER GENERATED THROUGH</strong></p>
         @php
             $path = public_path('assets/images/rfq-logo.png');
             $type = pathinfo($path, PATHINFO_EXTENSION);

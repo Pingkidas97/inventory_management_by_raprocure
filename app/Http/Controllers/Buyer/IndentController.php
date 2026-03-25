@@ -1402,6 +1402,7 @@ class IndentController extends Controller
             'i.id',
             'i.product_name',
             'i.specification',
+            'i.size',
             'i.buyer_product_name',
             'i.size',
             'i.uom_id',

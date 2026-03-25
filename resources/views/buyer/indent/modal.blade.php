@@ -7,16 +7,16 @@
                 <button type="button" class="btn-close font-size-10" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="form-floating w-25 mt-2" id="search_bulk_indent_product" style="display:none;">
+                <div class="form-floating w-75 mt-2" id="search_bulk_indent_product" style="display:none;">
                     <input type="text" class="form-control specialCharacterAllowed" name="search_product_name" id="search_indent_product_name" placeholder="" value="" />
                     <label for="search_product_name">Search for Product Name / Specification</label>
                 </div>
-                <ul id="product_search_list" class="list-group position-absolute w-25" style="z-index:999; display:none;"></ul>
+                <ul id="product_search_list" class="list-group position-absolute w-75" style="z-index:999; display:none;"></ul>
                 <form id="addIndentForm">
                     @csrf
                     <input type="hidden" id="indent_inventory_id" name="inventory_id">
                     <input type="hidden" id="indent_id" name="indent_id">
-                    <div class="table-responsive" >
+                    <div class="table-responsive">
                         <table class="product-listing-table w-100 text-center">
                             <thead>
                                 <tr>

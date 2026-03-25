@@ -83,13 +83,13 @@
         <div><strong>Vehicle No / LR No:</strong> {!! $order->vehicle_no_lr_no ?? '-' !!}</div>
         <div><strong>Gross Wt (kgs):</strong> {!! $order->gross_wt ?? '-' !!}</div>
         <div><strong>Vendor Name:</strong> {!! $order->vendor_name ?? '-' !!}</div>
+        <div><strong>Branch Name:</strong> {{ $order->inventory->branch->name ?? '-' }}</div>
     </div>
 
     <table>
         <thead>
             <tr>
                 <th>#</th>
-                <th>Order ID</th>
                 <th>PO Number</th>
                 <th>Gate Entry Quantity</th>
                 <th>Gate Entry Date</th>
@@ -98,8 +98,7 @@
         <tbody>
             @foreach($orders as $index => $order)
                 <tr>
-                    <td>{{ $index + 1 }}</td>
-                    <td>{{ $order->order_id ?? '-' }}</td>
+                    <td>{{ $index + 1 }}</td>                
                     <td>{{ $order->po_number ?? '-' }}</td>
                     <td>{{ number_format($order->grn_qty, 3) }}</td>
                     <td>{{ optional($order->updated_at)->format('d/m/Y') ?? '-' }}</td>

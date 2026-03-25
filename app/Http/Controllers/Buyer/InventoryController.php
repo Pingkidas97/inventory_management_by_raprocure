@@ -486,6 +486,7 @@ class InventoryController extends Controller
             $q->where(function ($subQuery) use ($request) {
                 $subQuery->where('buyer_product_name', 'like', '%' . $request->search_product_name . '%')
                     ->orwhere('specification', 'like', '%' . $request->search_product_name . '%')
+                    ->orwhere('item_code', 'like', '%' . $request->search_product_name . '%')
                     ->orWhereHas('product', function ($q2) use ($request) {
                         $q2->where('product_name', 'like', '%' . $request->search_product_name . '%');
                     });
@@ -2310,6 +2311,7 @@ class InventoryController extends Controller
             //     'created_by'    => Auth::user()->id,
             //     'created_at'    => now(),
             // ]);
+            $item_code = $this->generateItemCode($companyId,$branchId);
             $inventory = Inventories::where('product_id', $productId)
                 ->whereRaw('LOWER(specification) = ?', [strtolower($spec)])
                 ->whereRaw('LOWER(size) = ?', [strtolower($sz)])
@@ -2321,6 +2323,7 @@ class InventoryController extends Controller
                     'product_id'          => $productId,
                     'specification'       => $spec,
                     'size'                => $sz,
+                    'item_code'           => $item_code,
                     'buyer_branch_id'     => $branchId,
                     'buyer_parent_id'     => $companyId,
                     'uom_id'              => $uomId,

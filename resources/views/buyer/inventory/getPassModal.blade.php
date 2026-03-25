@@ -261,7 +261,7 @@ function fetchPendingOrdersForInventory(inventory_id) {
         success: function (response) {
 
             if (response.status && response.data && response.data.length > 0) {
-
+                $('#getPassResult').html('<div class="text-muted font-size-13">Please select vendor</div>');
                 let firstItem = response.data[0];
                 let firstOrder = firstItem.pending_orders && firstItem.pending_orders.length > 0 
                     ? firstItem.pending_orders[0] 
@@ -277,7 +277,7 @@ function fetchPendingOrdersForInventory(inventory_id) {
                     });
                 }
 
-                // ✅ সব order collect
+                //  সব order collect
                 let allOrders = [];
                 response.data.forEach(item => {
                     if (item.pending_orders && item.pending_orders.length > 0) {
@@ -285,22 +285,22 @@ function fetchPendingOrdersForInventory(inventory_id) {
                     }
                 });
 
-                // ✅ unique vendor list
+                //  unique vendor list
                 let uniqueVendors = [...new Set(allOrders.map(order => order.vendor_name))];
 
-                // ✅ dropdown fill
+                //  dropdown fill
                 uniqueVendors.forEach(vendor => {
                     $('#vendorDropdown').append(`<option value="${vendor}">${vendor}</option>`);
                 });
 
-                // ✅ global store
+                //  global store
                 window.allPendingOrders = allOrders;
 
-                // ❌ table initially hide থাকবে
+                //  table initially hide থাকবে
                 $('#inventoryListTable').hide();
                 $('#saveGetPassContainer').hide();
 
-                // ✅ vendor change event
+                //  vendor change event
                 $('#vendorDropdown').off('change').on('change', function () {
 
                     let selectedVendor = $(this).val();

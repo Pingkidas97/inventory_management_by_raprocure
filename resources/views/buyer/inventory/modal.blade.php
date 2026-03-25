@@ -1,3 +1,17 @@
+@push('styles')
+<style>
+    #stock_price[readonly] {
+        background-color: #dbeff1 !important;
+        color: #000 !important;
+        cursor: not-allowed !important;
+    }
+    #stock_price:not([readonly]) {
+        background-color: #fff !important;
+        color: #000 !important;
+        cursor: text !important;
+    }
+</style>
+@endpush
 <!---Inventory Modal-->
 <div class="modal fade" id="inventoryModal" tabindex="-1" aria-labelledby="inventoryModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
@@ -106,6 +120,23 @@
 @push('exJs')
     <script>
         $(document).ready(function () {
+            function toggleStockPrice() {
+                let stock = parseFloat($('#opening_stock').val());
+                let currentValue = $('#stock_price').val();
+
+                if (isNaN(stock) || stock === 0) {
+                    if (stock === 0 && (!currentValue || currentValue === '')) {
+                        $('#stock_price').val(0);
+                    }
+                    $('#stock_price').prop('readonly', true);
+                } else {
+                    $('#stock_price').prop('readonly', false);
+                    if (!currentValue) $('#stock_price').val('');
+                }
+            }
+
+            $('#inventoryModal').on('shown.bs.modal', toggleStockPrice);
+            $(document).on('input', '#opening_stock', toggleStockPrice);
 
             $("#productSuggestions").hide();
 

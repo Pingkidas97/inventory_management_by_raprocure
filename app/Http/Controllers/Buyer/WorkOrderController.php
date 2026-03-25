@@ -23,16 +23,27 @@ use App\Helpers\EmailHelper;
 class WorkOrderController extends Controller
 {
     use TrimFields;
-    public static function userCurrency(): void
+    public static function userCurrency() 
     {
         $userId = Auth::user()->parent_id ?: Auth::id();
         $currencyId = User::find($userId)->currency ==0? 1: User::find($userId)->currency;
         $currency = Currency::find($currencyId);
-
+        $taxes = Tax::where('status', '1')->get(['id', 'tax']);
         session(['user_currency' => [
             'id' => $currency->id,
             'symbol' => $currency->currency_symbol
         ]]);
+        $currency_symbol=session('user_currency')['symbol'] ?? '₹';
+        $currency_id = User::find($userId)->currency ==0? 1: User::find($userId)->currency;
+        $currencies = Currency::select('id', 'currency_symbol','currency_name')->get();
+        return response()->json([
+            'status' => 'success',
+            'data' => [               
+                'taxes' => $taxes,
+                'currency_symbol' => $currency_symbol,
+                'currencies' => $currencies
+            ]
+        ]);
     }
 
 
@@ -40,15 +51,16 @@ class WorkOrderController extends Controller
     public function store(Request $request)
     {
         $request = $this->trimAndReturnRequest($request);
+        
         $request->validate([
             'vendor_user_id'     => ['required', 'exists:users,id'],
             'wo_created_date'    => ['required'],
             'currency_id'        => ['required', 'exists:currencies,id'],
-            'inventory_id'       => ['required', 'array'],
-            'inventory_id.*'     => ['required', 'exists:inventories,id'],
+            //'inventory_id'       => ['required', 'array'],
+            //'inventory_id.*'     => ['required', 'exists:inventories,id'],
 
-            'qty'                => ['required', 'array'],
-            'qty.*'              => ['required', 'numeric', 'min:0', new NoSpecialCharacters(false)],
+            //'qty'                => ['required', 'array'],
+            //'qty.*'              => ['required', 'numeric', 'min:0', new NoSpecialCharacters(false)],
 
             'rate'               => ['required', 'array'],
             'rate.*'             => ['required', 'numeric', 'min:0.01', new NoSpecialCharacters(false)],
@@ -63,8 +75,8 @@ class WorkOrderController extends Controller
             'gst.*'              => ['required', 'exists:taxes,id'],
 
             'paymentTerms'       => ['required', 'string', 'max:2000', new NoSpecialCharacters(false)],
-            'priceBasis'         => ['required', 'string', 'max:2000', new NoSpecialCharacters(false)],
-            'deliveryPeriod'     => ['required', 'numeric', 'min:1', 'max:999', new NoSpecialCharacters(false)],
+            //'priceBasis'         => ['required', 'string', 'max:2000', new NoSpecialCharacters(false)],
+            //'deliveryPeriod'     => ['required', 'numeric', 'min:1', 'max:999', new NoSpecialCharacters(false)],
 
             'remarks'            => ['nullable', 'string', 'max:3000', new NoSpecialCharacters(true)],
             'additionalRemarks'  => ['nullable', 'string', 'max:3000', new NoSpecialCharacters(true)],
@@ -73,12 +85,10 @@ class WorkOrderController extends Controller
         $request->merge([
             'rate' => array_map(function ($r) {
                 return preg_match('/^\.\d+$/', $r) ? ('0'.$r) : $r;
-            }, $request->rate),
-            'qty' => array_map(function ($r) {
-                return preg_match('/^\.\d+$/', $r) ? ('0'.$r) : $r;
-            }, $request->qty)
+            }, $request->rate)
+            
         ]);
-
+        
         try {
             DB::beginTransaction();
             $userId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
@@ -109,18 +119,18 @@ class WorkOrderController extends Controller
             }
             $wo_created_date =  $request->wo_created_date;
             $wo_created_date = Carbon::createFromFormat('d/m/Y', $wo_created_date)->format('Y-m-d');
-
-            // Create the work  order
+            
             $WorkOrder = WorkOrder::create([
                 'work_order_number'       => $workOrderNumber,
                 'vendor_id'              => $request->vendor_user_id,
                 'buyer_id'               => $userId,
                 'currency_id'            => $request->currency_id,
                 'buyer_user_id'          => Auth::user()->id,
+                'branch_id'              => $request->branch_id,
                 'order_status'           => '1',
-                'order_price_basis'      => $request->priceBasis,
+                //'order_price_basis'      => $request->priceBasis,
                 'order_payment_term'     => $request->paymentTerms,
-                'order_delivery_period'  => $request->deliveryPeriod,
+                //'order_delivery_period'  => $request->deliveryPeriod,
                 'order_remarks'          => $request->remarks,
                 'order_add_remarks'      => $request->additionalRemarks,
                 'prepared_by'            => Auth::user()->id,
@@ -129,27 +139,22 @@ class WorkOrderController extends Controller
             ]);
 
             // Store each product
-            foreach ($request->qty as $index => $quantity) {
+            foreach ($request->prod_dec as $index => $prod_dec) {
                 $gstRate = Tax::find($request->gst[$index])?->tax ?? 0;
-                $qty=$quantity;
-                if($quantity==0){
-                    $qty=1;
-                }
+                $qty=1;
+                
                 $totalAmount = $qty * $request->rate[$index] * (1 + ($gstRate / 100));
-                $prodId = Inventories::where('id', $request->inventory_id[$index])->value('product_id');
-                if($prodId == null){
-                    $prodId = 0;
-                }
+                
                 WorkOrderProduct::create([
-                    'work_order_id'      => $WorkOrder->id,
-                    'product_id'           => $prodId,
-                    'inventory_id'         => $request->inventory_id[$index],
-                    'product_quantity'     => $quantity,
-                    'product_price'        => $request->rate[$index],
-                    'product_mrp'          => ($request->mrp[$index]  ?? '') === '' ? null : $request->mrp[$index],
-                    'product_disc'         => ($request->disc[$index] ?? '') === '' ? null : $request->disc[$index],
-                    'product_total_amount' => $totalAmount,
-                    'product_gst'          => $request->gst[$index],
+                    'work_order_id'         => $WorkOrder->id,
+                    'product_description'   => $prod_dec,
+                    //'inventory_id'          => $request->inventory_id[$index],
+                    //'product_quantity'      => $quantity,
+                    'product_price'         => $request->rate[$index],
+                    'product_mrp'           => ($request->mrp[$index]  ?? '') === '' ? null : $request->mrp[$index],
+                    'product_disc'          => ($request->disc[$index] ?? '') === '' ? null : $request->disc[$index],
+                    'product_total_amount'  => $totalAmount,
+                    'product_gst'           => $request->gst[$index],
                 ]);
             }
 
@@ -169,20 +174,29 @@ class WorkOrderController extends Controller
                 ]);
             }
 
-            DB::commit();
-            //start send mail
-            $this->sendEmail($workOrderNumber, $request, $wo_created_date);//pingki
-            //end send mail
             //start notification
             $notification_data = array();
             $notification_data['po_number'] = $workOrderNumber;
-            // $notification_data['message_type'] = 'Direct Order Confirmed';
-            // $notification_data['notification_link'] = route('vendor.work_order.download', $WorkOrder->id);
             $notification_data['message_type'] = 'Work Order Confirmed';
             $notification_data['notification_link'] = route('vendor.work_order.index');
             $notification_data['to_user_id'] = $request->vendor_user_id;
             sendNotifications($notification_data);
             //end notification
+
+            DB::commit();
+            //start send mail
+            $this->sendEmail($workOrderNumber, $request, $wo_created_date);//pingki
+            //end send mail
+
+            $fcm_tokens = DB::table('users')->select('fcm_token')->where('id', $request->vendor_user_id)->where('fcm_token', '!=', null)
+                            ->get()->pluck('fcm_token')->toArray();
+
+            if(!empty($fcm_tokens)){
+                unset($notification_data['to_user_id']);
+                $notification_data['fcm_tokens'] = $fcm_tokens;
+                sendFirebaseNotifications($notification_data);
+            }
+            
             return response()->json([
                 'status' => '1',
                 'message' => 'Work Order generated successfully!',
@@ -211,7 +225,7 @@ class WorkOrderController extends Controller
             ->with(['user', 'vendor_country', 'vendor_state', 'vendor_city'])
             ->first();
 
-        $subject = "Direct Order Confirmed (Order No. " . $order->work_order_number . " )";
+        $subject = "Work Order Confirmed (Order No. " . $order->work_order_number . " )";
 
         $mail_data = vendorEmailTemplet('order-confirmation-email');
         $admin_msg = $mail_data->mail_message;
@@ -282,36 +296,54 @@ class WorkOrderController extends Controller
         if (!$request->ajax()) return;
 
         $query = $this->getFilteredQuery($request);
+
         $perPage = $request->length ?? 25;
         $page = intval(($request->start ?? 0) / $perPage) + 1;
-        $paginated = $query->Paginate($perPage, ['*'], 'page', $page);
-        $inventories = $paginated->items();
-        $data = [];
-        foreach ($inventories as $row) {
-            $filteredProducts = $row->products;
 
-            if ($request->search_product_name) {
-                $filteredProducts = $filteredProducts->filter(function ($product) use ($request) {
-                    return stripos($product->product->product_name ?? '', $request->search_product_name) !== false;
-                });
-            }
-            $currency_symbol = $row->currencyDetails?->currency_symbol ?? (session('user_currency')['symbol'] ?? '₹');
-            $totalAmount = $filteredProducts->sum('product_total_amount');
+        $paginated = $query->paginate($perPage, ['*'], 'page', $page);
+        $workOrders = $paginated->items();
+
+        $data = [];
+
+        foreach ($workOrders as $row) {
+
+            // Get product descriptions from work_order_products
+            $productDescriptions = $row->products
+                ->pluck('product_description')
+                ->implode(', ');
+
+            // Get total amount from work_order_products
+            $totalAmount = $row->products
+                ->sum('product_total_amount');
+
+            $currency_symbol = $row->currencyDetails?->currency_symbol 
+                ?? (session('user_currency')['symbol'] ?? '₹');
+
             $data[] = [
                 'work_order_number' => $row->work_order_number,
-                'order_date' => $row->created_at ? Carbon::parse($row->created_at)->format('d/m/Y') : '',
-                'product_names' => TruncateWithTooltipHelper::wrapText($this->formatProductName($row, $request->search_product_name, $request->search_category_id)),
+
+                'order_date' => $row->created_at
+                    ? Carbon::parse($row->created_at)->format('d/m/Y')
+                    : '',
+
+                // now correct
+                'product_names' => TruncateWithTooltipHelper::wrapText($productDescriptions),
+
                 'vendor_name' => optional($row->vendor)->legal_name ?? '',
                 'prepared_by' => optional($row->preparedBy)->name ?? '',
-                'total_amount' => NumberFormatterHelper::formatCurrency($totalAmount,$currency_symbol),
-                'status' => '<a href="javascript:void(0)" data-url="' . route('buyer.report.workOrder.download', $row->id) . '"
+
+                // correct total
+                'total_amount' => NumberFormatterHelper::formatCurrency($totalAmount, $currency_symbol),
+
+                'status' => '
+                    <a href="javascript:void(0)" 
+                    data-url="' . route('buyer.report.workOrder.download', $row->id) . '"
                     class="ra-btn ra-btn-primary font-size-11 export-btn"
-                    style="background-color: #043e6c; color: #ffffff !important; border: none;"
-                    onmouseover="this.style.color=\'#ffffff\'"
-                    onmouseout="this.style.color=\'#ffffff\'">
-                    <span class="bi bi-download d-none d-sm-inline-block"></span>
-                    DOWNLOAD
-                </a>',
+                    style="background-color: #043e6c; color: #ffffff !important; border: none; text-align:center;">
+                        <span class="bi bi-download d-none d-sm-inline-block"></span>
+                        DOWNLOAD
+                    </a>
+                ',
             ];
         }
 
@@ -366,41 +398,46 @@ class WorkOrderController extends Controller
 
     public function getFilteredQuery(Request $request)
     {
+        // Set session branch
         if (session('branch_id') != $request->branch_id) {
-                session(['branch_id' => $request->branch_id]);
-            }
+            session(['branch_id' => $request->branch_id]);
+        }
 
-        $query = WorkOrder::with(['vendor', 'preparedBy', 'products.product','products.inventory.branch']);
+        $userId = Auth::user()->parent_id ?: Auth::id();
 
-        $query
-            ->when($request->buyer_id == Auth::user()->parent_id ?? Auth::user()->id, fn($q) => $q->where('buyer_id', Auth::user()->parent_id ?? Auth::user()->id))
-            ->when($request->filled(['from_date', 'to_date']), function ($q) use ($request) {
-                $from = Carbon::createFromFormat('d/m/Y', $request->from_date)->startOfDay();
-                $to   = Carbon::createFromFormat('d/m/Y', $request->to_date)->endOfDay();
+        $query = WorkOrder::with(['vendor', 'preparedBy', 'branch']);
 
-                $q->whereBetween('created_at', [$from, $to]);
-            })
-            ->when($request->search_product_name, fn($q, $val) =>
-                $q->whereHas('products.product', fn($p) => $p->where('product_name', 'like', "%$val%"))
-            )
-            ->when($request->search_order_no, fn($q, $val) => $q->where('work_order_number', 'like', "%$val%"))
-            ->when($request->search_vendor_name, fn($q, $val) =>
-                $q->whereHas('vendor', fn($v) => $v->where('legal_name', 'like', "%$val%"))
-            )
-            ->when($request->search_category_id, function ($q, $val) {
-                $cat_ids = InventoryController::getIdsByCategoryName($val);
+        // Buyer filter (always applied)
+        $query->where('buyer_id', $userId);
+        $query->where('branch_id', $request->branch_id);
 
-                if (!empty($cat_ids)) {
-                    $q->whereHas('products.product', function ($q2) use ($cat_ids) {
-                        $q2->whereIn('category_id', $cat_ids);
-                    });
-                }
-            })
+        // Date filter
+        if ($request->filled(['from_date', 'to_date'])) {
+            $from = Carbon::createFromFormat('d/m/Y', $request->from_date)->startOfDay();
+            $to   = Carbon::createFromFormat('d/m/Y', $request->to_date)->endOfDay();
 
-            ->when($request->order_status, fn($q, $val) => $q->where('order_status', $val))
-            ->when($request->branch_id, fn($q, $val) =>
-            $q->whereHas('products.inventory.branch', fn($b) => $b->where('branch_id', $val)))
-            ->orderBy('id', 'desc')->orderBy('created_at', 'desc');
+            $query->whereBetween('created_at', [$from, $to]);
+        }
+
+        // Order number search
+        if ($request->filled('search_order_no')) {
+            $query->where('work_order_number', 'like', '%' . $request->search_order_no . '%');
+        }
+
+        // Vendor name search
+        if ($request->filled('search_vendor_name')) {
+            $query->whereHas('vendor', function ($q) use ($request) {
+                $q->where('legal_name', 'like', '%' . $request->search_vendor_name . '%');
+            });
+        }
+
+        // Order status
+        if ($request->filled('order_status')) {
+            $query->where('order_status', $request->order_status);
+        }
+
+        // Sorting
+        $query->orderBy('id', 'desc')->orderBy('created_at', 'desc');
 
         return $query;
     }
@@ -436,18 +473,26 @@ class WorkOrderController extends Controller
     //---------------------------------Download work  Order----------------------------------
     public function download($id)
     {
-        $order = WorkOrder::findOrFail($id);
-        $order->load([
-            'products.inventory.branch','vendor','vendorUser.vendor',
-            'products.vendorProducts' => function ($query) use ($order) {
-                $query->where('vendor_id', $order->vendor_id);
-            }
-        ]);
-        $other_terms = DB::table('other_terms_conditions')->where('po_number', $order->work_order_number)->first();
+        $order = WorkOrder::with([
+            'products.tax',   // 
+            'vendor'      // 
+        ])->findOrFail($id);
+        $branch = \App\Models\BranchDetail::with([
+            'branch_city',
+            'branch_state',
+            'branch_country'
+        ])->where('branch_id', $order->branch_id)->first();
+        $order->setRelation('branch', $branch);
+        // Other terms
+        $other_terms = DB::table('other_terms_conditions')
+            ->where('po_number', $order->work_order_number)
+            ->first();
+        $order->branch = $branch;    
         $order->order_other_terms = $other_terms->other_terms ?? '';
-
+        //dd($order);
+        // Load PDF
         $pdf = Pdf::loadView('buyer.inventory.downloadWorkOrder', compact('order'))
-          ->setPaper('A4', 'portrait');
+            ->setPaper('A4', 'portrait');
 
         return response()->streamDownload(function () use ($pdf) {
             echo $pdf->output();

@@ -9,9 +9,7 @@ class WorkOrderProduct extends Model
 {
     protected $fillable = [
         'work_order_id',
-        'product_id',
-        'inventory_id',
-        'product_quantity',
+        'product_description',
         'product_price',
         'product_mrp',
         'product_disc',
@@ -30,21 +28,14 @@ class WorkOrderProduct extends Model
     }
     
 
-     public function inventory()
+    public function inventory()
     {
         return $this->belongsTo(Inventories::class, 'inventory_id', 'id');
     }
 
-    public function product()
+    public function products()
     {
-        return $this->belongsTo(Product::class, 'product_id', 'id')
-        ->withDefault(function ($product, $orderProduct) {
-            // If product_id = 0 or product not found
-            if (empty($orderProduct->product_id) || $orderProduct->product_id == 0) {
-                $product->product_name = optional($orderProduct->inventory)->buyer_product_name;
-                $product->category_id  = null;
-            }
-        });
+        return $this->hasMany(WorkOrderProduct::class, 'work_order_id');
     }
 
     public function branch()

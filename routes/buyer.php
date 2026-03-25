@@ -211,6 +211,7 @@ Route::name('buyer.')->group(function() {
                });
                 // WorkOrder
                 Route::prefix('workOrder')->name('workOrder.')->group(function () {
+                    Route::get('/usercurrency',  [WorkOrderController::class,'userCurrency'])->name('userCurrency');
                     Route::post('/store', [WorkOrderController::class,'store'])->name('store');
                 });
 

@@ -1,122 +1,273 @@
 $(document).ready(function () {
     $('.workOrder').on('click', function (e) {
         e.preventDefault();
-        if (selectedIds.length > 0) {
+        //if (selectedIds.length > 0) {
             $('#generate_work_order_form')[0].reset();
             $('#wo_vendor_user_id').val('');
             $("#wo_other_term_check").val('1').prop('checked', true);
-            fetchInventoryDetails(selectedIds);
-        } else {
-            toastr.error('Please select an inventory details.');
-            return;
-        }
+            fetchInventoryDetails();
+        // } else {
+        //     toastr.error('Please select an inventory details.');
+        //     return;
+        // }
     });
 
-    function fetchInventoryDetails(ids) {
-        $.post(manualPOFetchURL, {
-            ids: ids,
-            _token: $('meta[name="csrf-token"]').attr('content')
-        }, function (response) {
+    function fetchInventoryDetails() {
+        $.get(workorderusercurrency, {}, function (response) {
+
             if (response.status === 'error') {
                 return toastr.error(response.message);
             }
+
+            // Reset fields
             $('#wo_vendor_name').val('');
             $('#vendorNameIdWo').nextAll('tr').remove();
+
             const table = $('#forworkOrderInventoryDetailsTableBody');
             table.empty();
 
-            const inventories = response.data.inventories;
             const taxes = response.data.taxes;
 
             /* ================= CURRENCY SETUP ================= */
 
-                const currencySymbol = response.data.currency_symbol || '';
-                let currencySelect = document.getElementById('wo_currency_id');
-                currencySelect.innerHTML = "";
+            const currencySymbol = response.data.currency_symbol || '';
+            let currencySelect = document.getElementById('wo_currency_id');
+            currencySelect.innerHTML = "";
 
-                if (currencySymbol === "") {
+            if (currencySymbol === "") {
 
-                    currencySelect.innerHTML = `<option value="" disabled selected>Select Currency</option>`;
+                currencySelect.innerHTML = `<option value="" disabled selected>Select Currency</option>`;
 
-                    response.data.currencies.forEach(c => {
-                        currencySelect.innerHTML += `
-                            <option value="${c.id}" data-symbol="${c.currency_symbol}">
-                                ${c.currency_symbol} (${c.currency_name})
-                            </option>`;
-                    });
+                response.data.currencies.forEach(c => {
+                    currencySelect.innerHTML += `
+                        <option value="${c.id}" data-symbol="${c.currency_symbol}">
+                            ${c.currency_symbol} (${c.currency_name})
+                        </option>`;
+                });
 
-                    $('.mo_currency_symbol').text('');
+                $('.mo_currency_symbol').text('');
 
-                } else {
+            } else {
 
-                    response.data.currencies.forEach(c => {
-                        let selected = (c.currency_symbol === currencySymbol) ? 'selected' : '';
-                        currencySelect.innerHTML += `
-                            <option value="${c.id}" ${selected} data-symbol="${c.currency_symbol}">
-                                ${c.currency_symbol} (${c.currency_name})
-                            </option>`;
-                    });
+                response.data.currencies.forEach(c => {
+                    let selected = (c.currency_symbol === currencySymbol) ? 'selected' : '';
+                    currencySelect.innerHTML += `
+                        <option value="${c.id}" ${selected} data-symbol="${c.currency_symbol}">
+                            ${c.currency_symbol} (${c.currency_name})
+                        </option>`;
+                });
 
-                    $('.mo_currency_symbol').text(currencySymbol);
-                }
+                $('.mo_currency_symbol').text(currencySymbol);
+            }
 
-                /*  currency change handler (IMPORTANT) */
-                currencySelect.onchange = function () {
-                    let symbol = this.options[this.selectedIndex].getAttribute('data-symbol') || '';
-                    $('.mo_currency_symbol').text(symbol);
+            currencySelect.onchange = function () {
+                let symbol = this.options[this.selectedIndex].getAttribute('data-symbol') || '';
+                $('.mo_currency_symbol').text(symbol);
+                $('#total-row .mo_currency_symbol').text(symbol);
+            };
 
-                    // update total row symbol also
-                    $('#total-row .mo_currency_symbol').text(symbol);
-                };
-            /* ================= CURRENCY SETUP ================= */
+            /* ================= TAX OPTIONS ================= */
+
             let taxOptions = `<option value="">Select Tax</option>`;
             taxes.forEach(tax => {
                 taxOptions += `<option value="${tax.id}" data-tax="${tax.tax}">${tax.tax}%</option>`;
             });
-            inventories.forEach(item => {
-                const row = `
+
+            // Store globally for reuse
+            window.woTaxOptions = taxOptions;
+
+            /* ================= ROW GENERATOR ================= */
+            let branchId = $('#branch_id').val();
+
+            $('#modal_branch_id').val(branchId);
+            function generateRow() {
+                return `
                     <tr>
-                        <td class="text-center align-middle">${item.product.product_name ?? item.buyer_product_name}<input type="hidden"  name="inventory_id[]" value="${item.id}"  /></td>
-                        <td class="text-center align-middle">${item.specification}</td>
-                        <td class="text-center align-middle">${item.size}</td>
-                        <td class="text-center align-middle">${item.uom?.uom_name ?? ''}</td>
-                        <td class="text-center align-middle"><input type="text" class="form-control bg-white w-100 wo-qty-input" name="qty[]" value="0"  inputmode="decimal" maxlength="10"/></td>
-                        <td class="text-center align-middle"><input type="text" class="form-control bg-white w-125 wo-rate-input" name="rate[]" value="" min="0.01" step="0.01" inputmode="decimal" maxlength="10"/></td>
-                        <td class="text-center align-middle"><input type="text" class="form-control bg-white w-125 wo-mrp-input" name="mrp[]" value="" min="0.01" step="0.01" inputmode="decimal" maxlength="10"/></td>
-                        <td class="text-center align-middle"><input type="text" class="form-control bg-white w-100 wo-disc-input" name="disc[]" value="" min="0.01" max="100" step="0.01" inputmode="decimal" maxlength="10"/></td>
+                        <td class="text-center align-middle">
+                            <input type="text" class="form-control bg-white" style="width: 530px;" name="prod_dec[]" maxlength="5000"/>
+                        </td>
+                        <td class="text-center align-middle">
+                            <input type="text" class="form-control bg-white w-125 wo-rate-input" name="rate[]" maxlength="10"/>
+                        </td>
+                        <td class="text-center align-middle">
+                            <input type="text" class="form-control bg-white w-125 wo-mrp-input" name="mrp[]" maxlength="10"/>
+                        </td>
+                        <td class="text-center align-middle">
+                            <input type="text" class="form-control bg-white w-100 wo-disc-input" name="disc[]" maxlength="10"/>
+                        </td>
                         <td class="text-center align-middle">
                             <select class="form-select wo-gst-select form-select-sm w-120" name="gst[]">
-                                ${taxOptions}
+                                ${window.woTaxOptions}
                             </select>
                         </td>
                         <td class="wo-total-amount text-center align-middle">0.00</td>
                         <td class="text-center align-middle">
-                            <button type="button" class="btn btn-danger width-inherit wo_remove-row" title="Remove">
+                            <button type="button" class="btn btn-danger wo_remove-row">
                                 <i class="fas fa-times"></i>
                             </button>
                         </td>
                     </tr>
                 `;
-                table.append(row);
-            });
+            }
+
+            /* ================= INITIAL ROW ================= */
+
+            table.append(generateRow());
+
+            /* ================= TOTAL ROW ================= */
 
             const totalRow = `
                 <tr id="total-row" class="bg-white border border-top">
-                    <td colspan="9" class="text-right">
+                    <td colspan="5" class="text-right">
                         <strong>Total Amount (<span class="mo_currency_symbol">${currencySymbol}</span>):</strong>
                     </td>
                     <td id="wo_grand-total" class="text-center align-middle">0.00</td>
                     <td></td>
                 </tr>
+                <tr id="total-in-words-row" class="bg-white">
+                    <td colspan="7" class="text-left">
+                        <strong>In Words:</strong> <span id="wo_total_in_words" style="font-size: 14px;"></span>
+                    </td>
+                </tr>
             `;
             table.append(totalRow);
+
+            /* ================= ADD ROW BUTTON ================= */
+
+            $(document).off('click', '#wo_add_row').on('click', '#wo_add_row', function () {
+                $('#total-row').before(generateRow());
+            });
+
+            /* ================= REMOVE ROW ================= */
+
+            $(document).off('click', '.wo_remove-row').on('click', '.wo_remove-row', function () {
+                const rowCount = $('#forworkOrderInventoryDetailsTableBody tr').not('#total-row').length;
+
+                if (rowCount <= 1) {
+                    toastr.warning('At least one row is required');
+                    return;
+                }
+
+                $(this).closest('tr').remove();
+            })
+
+            /* ================= FINAL UI ================= */
 
             $("#workOrderModal").modal("show");
             $('#vendorSuggestionsWo').hide();
             $('.wo-disc-input').prop('disabled', true);
-        }).fail(() => toastr.error('Failed to load inventory details.'));
+
+        }).fail(() => {
+            toastr.error('Failed to load inventory details.');
+        });
+    }
+    function getCurrencyName() {
+        let select = document.getElementById('wo_currency_id');
+        return select.options[select.selectedIndex].getAttribute('data-name') || '';
+    }
+    function getCurrencyPrefix(currencyName) {
+        currencyName = currencyName.toLowerCase();
+
+        if (currencyName.includes('rupee') && currencyName.includes('nepal')) {
+            return 'Nepalese Rupees';
+        } else if (currencyName.includes('rupee')) {
+            return 'Rupees';
+        } else if (currencyName.includes('dollar')) {
+            return 'Dollars';
+        }
+
+        return currencyName;
+    }
+    function updateTotalWords(total) {
+        const currencyId = $('#wo_currency_id').val();
+        const prefix = $('#wo_currency_id option:selected').data('symbol');
+
+        const words = numberToWords(total, currencyId);
+
+        $('#wo_total_in_words').text(`${prefix} ${words} Only`);
+    }
+    
+    function numberToWords(num, currencyId) {
+        
+        if (isNaN(num)) return '';
+
+        const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven',
+            'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen',
+            'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+
+        const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty',
+            'Seventy', 'Eighty', 'Ninety'];
+
+        function twoDigits(n) {
+            n = parseInt(n);
+            if (n === 0) return '';
+            return n < 20 ? a[n] : b[Math.floor(n / 10)] + (n % 10 ? ' ' + a[n % 10] : '');
+        }
+
+        function convertNumber(num) {
+            num = parseInt(num);
+
+            if (num === 0) return 'Zero';
+
+            let str = '';
+
+            let crore = Math.floor(num / 10000000);
+            num %= 10000000;
+
+            let lakh = Math.floor(num / 100000);
+            num %= 100000;
+
+            let thousand = Math.floor(num / 1000);
+            num %= 1000;
+
+            let hundred = Math.floor(num / 100);
+            let rest = num % 100;
+
+            if (crore) str += twoDigits(crore) + ' Crore ';
+            if (lakh) str += twoDigits(lakh) + ' Lakh ';
+            if (thousand) str += twoDigits(thousand) + ' Thousand ';
+            if (hundred) str += a[hundred] + ' Hundred ';
+
+            if (rest) {
+                str += (str ? 'and ' : '') + twoDigits(rest) + ' ';
+            }
+
+            return str.trim();
+        }
+
+        // Fix floating issue
+        num = Number(num).toFixed(2);
+
+        let parts = num.split('.');
+        let integerPart = parts[0];
+        let decimalPart = parts[1] ? parts[1] : '00';
+
+        // Currency labels
+        let mainCurrency = 'Rupees';
+        let subCurrency = 'Paise';
+
+        if (currencyId == 2) { // USD
+            mainCurrency = 'Dollars';
+            subCurrency = 'Cents';
+        } else if (currencyId == 3) { // NPR
+            mainCurrency = 'Rupees';
+            subCurrency = 'Paisa';
+        }
+
+        let result = `${mainCurrency} ${convertNumber(integerPart)}`;
+
+        if (parseInt(decimalPart) > 0) {
+            result += ` and ${convertNumber(decimalPart)} ${subCurrency}`;
+        }
+
+        return result;
     }
 
+    $('#wo_currency_id').on('change', function () {
+        let total = parseFloat($('#wo_grand-total').text()) || 0;
+        total = parseFloat(total) || 0;
+        updateTotalWords(total);
+    });
     // Allow only numbers and one dot (.) in qty and rate inputs
     $(document).on('keypress', '.wo-qty-input, .wo-rate-input,.wo-disc-input,.wo-mrp-input', function (e) {
         const charCode = e.which ?? e.keyCode;
@@ -290,6 +441,7 @@ $(document).ready(function () {
         });
 
         $('#wo_grand-total').text(grandTotal.toFixed(2));
+        updateTotalWords(grandTotal);
     }
 
     // On input/change — quantity, rate, or GST select
@@ -359,20 +511,7 @@ $(document).ready(function () {
         });
     });
 
-    $('#deliveryPeriod').on('keyup paste', function () {
-        let input = $(this).val();
-        input = input.replace(/\D/g, '');
-        if (input.length > 3) {
-            input = '999';
-        }
-        let value = parseInt(input, 10);
-        if (isNaN(value) || value < 1) {
-            value = '';
-        } else if (value > 999) {
-            value = 999;
-        }
-        $(this).val(value);
-    });
+    
 
 
     let isWorkOrderSubmitting = false;
@@ -386,7 +525,20 @@ $(document).ready(function () {
 
         let button = $(this);
         let originalHtml = button.html();
+        let descError = false;
 
+        $('input[name="prod_dec[]"]').each(function () {
+            let value = $(this).val().trim();
+
+            if (value === '') {
+                descError = true;
+                $(this).addClass('is-invalid');
+            } else {
+                $(this).removeClass('is-invalid');
+            }
+        });
+
+        if (descError) return showError('Product description cannot be empty.');     
         //  Show Saving loader
         button.html('<span class="spinner-border spinner-border-sm me-1"></span> Saving...');
         button.prop('disabled', true);
@@ -395,10 +547,8 @@ $(document).ready(function () {
         const vendorId = $('#wo_vendor_user_id').val();
         const wo_created_date = $('#wo_created_date').val();
         const paymentTerms = $('#wo_paymentTerms').val();
-        const priceBasis = $('#wo_priceBasis').val();
-        const deliveryPeriod = $('#wo_deliveryPeriod').val();
         const remarks = $('#wo_remarks').val();
-        const additionalRemarks = $('#wo_additionalRemarks').val();        
+        const additionalRemarks = $('#wo_additionalRemarks').val();
         const totalAmount = parseFloat($('.wo-total-amount').text().trim());
 
         // ---------- VALIDATION ----------
@@ -406,14 +556,7 @@ $(document).ready(function () {
         if (!wo_created_date) return showError('Work Order Date cannot be empty.');
 
         let qtyError = false;
-        $('.wo-qty-input').each(function () {
-            const qty = $(this).val()?.trim();
-            if (qty === '' || isNaN(qty) || parseFloat(qty) < 0) {
-                qtyError = true;
-                return false;
-            }
-        });
-        if (qtyError) return showError('Quantity must not be negative.');
+       
 
         let rateError = false;
         $('.wo-rate-input').each(function () {
@@ -428,8 +571,6 @@ $(document).ready(function () {
             return showError('Total amount must be greater than 0.');
         }
         if (!paymentTerms) return showError('Payment Terms cannot be empty.');
-        if (!deliveryPeriod) return showError('Delivery Period cannot be empty.');
-        if (!priceBasis) return showError('Price Basis cannot be empty.');
 
         // ---------- AJAX ----------
         $.ajax({

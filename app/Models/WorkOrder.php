@@ -9,14 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class WorkOrder extends Model
 {
     protected $fillable = [
-        'work_order_number','currency_id', 'vendor_id', 'buyer_id', 'buyer_user_id',
+        'work_order_number','currency_id', 'vendor_id', 'buyer_id', 'buyer_user_id', 'branch_id',
         'order_status', 'order_price_basis', 'order_payment_term',
         'order_delivery_period', 'order_remarks', 'order_add_remarks',
         'prepared_by', 'approved_by', 'created_at',
     ];
-    public function products(): HasMany
+    public function products()
     {
-        return $this->hasMany(WorkOrderProduct::class, 'work_order_id')->whereHas('inventory');
+        return $this->hasMany(WorkOrderProduct::class, 'work_order_id');
     }
     public function vendorUser(): BelongsTo
     {
@@ -26,8 +26,10 @@ class WorkOrder extends Model
     {
         return $this->belongsTo(Vendor::class, 'vendor_id','user_id');
     }
-
-    
+    public function branch()
+    {
+        return $this->belongsTo(BranchDetail::class, 'branch_id', 'branch_id');
+    }
 
     public function buyer()
     {
@@ -49,10 +51,10 @@ class WorkOrder extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
-    public function getBranchIdAttribute()
-    {
-        return $this->products->first()?->inventory?->branch_id;
-    }
+    // public function getBranchIdAttribute()
+    // {
+    //     return $this->products->first()?->inventory?->branch_id;
+    // }
 
     public function getBranchNameAttribute()
     {

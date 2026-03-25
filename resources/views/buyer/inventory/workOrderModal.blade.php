@@ -37,21 +37,19 @@
                             </tr>
                         </table>
                     </div>
+                    
                     <div class="table-responsive">
                         <table class="product-listing-table w-100" id="forworkOrderInventoryDetailsTable">
                             <thead>
                                 <tr>
-                                    <th class="text-nowrap text-center align-middle">Product Name</th>
-                                    <th class="text-nowrap text-center align-middle">Product Specification</th>
-                                    <th class="text-nowrap text-center align-middle">Product Size</th>
-                                    <th class="text-nowrap text-center align-middle">Product UOM</th>
-                                    <th class="text-nowrap text-center align-middle">Quantity <span class="text-danger">*</span></th>
+                                    <input type="hidden" name="branch_id" id="modal_branch_id">
+                                    <th class="text-nowrap text-center align-middle">Product Description</th>
                                     <th class="text-nowrap text-center align-middle">Price (<span class="mo_currency_symbol"></span>) <span class="text-danger">*</span></th>
                                     <th class="text-nowrap text-center align-middle">MRP (<span class="mo_currency_symbol"></span>) <span class="text-danger">*</span></th>
                                     <th class="text-nowrap text-center align-middle">Disc.(%) <span class="text-danger">*</span></th>
                                     <th class="text-nowrap text-center align-middle">GST <span class="text-danger">*</span></th>
                                     <th class="text-nowrap text-center align-middle">Total Amount(<span class="mo_currency_symbol"></span>)</th>
-                                    <th></th>
+                                    <th><button type="button" id="wo_add_row" class="btn btn-primary mb-2 float-right"> + </button></th>
                                 </tr>
                             </thead>
                             <tbody id="forworkOrderInventoryDetailsTableBody">
@@ -63,7 +61,7 @@
                     <div class="border_hr"></div>
                     <div class="row g-3 pt-5 pt-sm-5 mb-3">
                         <!-- Payment Terms -->
-                        <div class="col-12 col-sm-3 mb-3">
+                        <div class="col-12 col-sm-6 mb-3">
                             <div class="input-group">
                                 <span class="input-group-text"><span class="bi bi-journal-medical"></span></span>
                                 <div class="form-floating">
@@ -74,18 +72,18 @@
                         </div>
 
                         <!-- Delivery Period -->
-                        <div class="col-12 col-sm-3 mb-3">
+                        <!--<div class="col-12 col-sm-6 mb-3">
                             <div class="input-group">
                                 <span class="input-group-text"><span class="bi bi-calendar-date"></span></span>
                                 <div class="form-floating">
-                                    <input type="text" class="form-control smt_numeric_only" id="wo_deliveryPeriod" name="deliveryPeriod" placeholder="Delivery Period" maxlength="3">
+                                    <input type="text" class="form-control" id="wo_deliveryPeriod" name="deliveryPeriod" placeholder="Delivery Period" maxlength="3">
                                     <label>Delivery Period (In Days)<sup class="text-danger">*</sup></label>
                                 </div>
                             </div>
-                        </div>
+                        </div>-->
 
                         <!-- Price Basis -->
-                        <div class="col-12 col-sm-3 mb-3">
+                        <!--<div class="col-12 col-sm-6 mb-3">
                             <div class="input-group">
                                 <span class="input-group-text"><span class="bi bi-currency-rupee"></span></span>
                                 <div class="form-floating">
@@ -93,9 +91,9 @@
                                     <label>Price Basis <sup class="text-danger">*</sup></label>
                                 </div>
                             </div>
-                        </div>
+                        </div>-->
                         <!-- Currency -->
-                        <div class="col-12 col-sm-3 mb-3">
+                        <div class="col-12 col-sm-6 mb-3">
                             <div class="input-group">
                                 <span class="input-group-text"><span class="bi bi-currency-rupee"></span></span>
                                 <div class="form-floating">

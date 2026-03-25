@@ -44,10 +44,7 @@ $(document).ready(function () {
             $('#inventoryForm').find('input[type="hidden"], select').val('');
             $('#divisionCategory').html('');
             $('#inventoryModal').modal('show');
-            // $('.item_code').hide();
-            $('#inventoryModal').on('shown.bs.modal', function () {
-                $(this).find('.item_code').hide();
-            });
+            $('.item_code').hide();
 
             toggleInventoryFields(inventoryFields, true);
 
@@ -184,9 +181,9 @@ $(document).ready(function () {
     $('#inventoryModal').on('hidden.bs.modal', function () {
         // $('#inventoryForm')[0].reset();
         var form = $('#inventoryForm')[0];
-            if(form){
-                form.reset();
-            }
+        if(form){
+            form.reset();
+        }
         $('#divisionCategory').html('');
         $('#inventory_product_name').val('');
     });
@@ -381,20 +378,15 @@ $(document).ready(function () {
                     const li = document.createElement("li");
                     li.className = "list-group-item search-product-item";
 
-                    const name = product.product_name || product.buyer_product_name;
-                    const spec = product.specification ?? '';
-                    const size = product.size ?? '';
-                    const uom = product.uom_name ?? '';
-
-                    // SAFE attributes
+                    // Data attributes
                     li.setAttribute("data-id", product.id);
-                    li.setAttribute("data-name", escapeHtml(name));
-                    li.setAttribute("data-spec", escapeHtml(spec));
-                    li.setAttribute("data-size", escapeHtml(size));
-                    li.setAttribute("data-uom", escapeHtml(uom));
+                    li.setAttribute("data-name", product.product_name ?? product.buyer_product_name);
+                    li.setAttribute("data-spec", product.specification);
+                    li.setAttribute("data-size", product.size);
+                    li.setAttribute("data-uom", product.uom_name);
 
-                    // SAFE visible text (textContent already safe)
-                    li.textContent = `${name} - ${spec} - ${size}`;
+                    // Visible text (safe for < >)
+                    li.textContent = `${product.product_name ?? product.buyer_product_name} - ${product.specification}`;
 
                     suggestionHtml += li.outerHTML;
                 });
@@ -403,15 +395,7 @@ $(document).ready(function () {
             }
         });
     });
-    function escapeHtml(text) {
-        if (!text) return '';
-        return text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
+
     $(document).on('click', '.search-product-item', function () {
 
         let id   = $(this).data('id');

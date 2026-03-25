@@ -16,6 +16,7 @@ use App\Http\Controllers\Buyer\InventoryController;
 use App\Http\Controllers\Buyer\InventoryVendorProductController;
 use App\Http\Controllers\Buyer\BulkInventoryController;
 use App\Http\Controllers\Buyer\ManualPOController;
+use App\Http\Controllers\Buyer\ForceClosureController;
 use App\Http\Controllers\Buyer\ReportsController;
 use App\Http\Controllers\Buyer\IssuedController;
 use App\Http\Controllers\Buyer\IndentController;
@@ -26,7 +27,7 @@ use App\Http\Controllers\Buyer\IssueReturnController;
 use App\Http\Controllers\Buyer\StockReturnController;
 use App\Services\ExportService;
 use App\Http\Controllers\Buyer\GetPassController;
-
+use App\Http\Controllers\Buyer\WorkOrderController;
 //end inventory section
 use App\Http\Controllers\Buyer\SearchProductController;
 use App\Http\Controllers\Buyer\ActiveRFQController;
@@ -134,11 +135,14 @@ Route::name('buyer.')->group(function () {
                 Route::get('search-bulk-product', [BulkRFQController::class, 'searchProduct'])->name('rfq.search-bulk-product');
                 // Route::post('validate-product-name', [BulkRFQController::class, 'validateProductName'])->name('rfq.bulk-rfq.validateProductName');
                 Route::post('bulk-draft-rfq', [BulkRFQController::class, 'bulkDraftRFQ'])->name('rfq.bulk-rfq.bulkDraftRFQ');
+                Route::post('generate-indent-request', [BulkRFQController::class, 'generateRfqIndent'])->name('rfq.generate-indent-request');
+                Route::get('indent-request-list', [BulkRFQController::class, 'indentRequestList'])->name('rfq.indent-request-list');
 
                 Route::get('active-rfq', [ActiveRFQController::class, 'index'])->name('rfq.active-rfq');
                 Route::get('sent-rfq', [ActiveRFQController::class, 'sent_rfq'])->name('rfq.sent-rfq');
                 Route::post('reuse-rfq', [ActiveRFQController::class, 'reuseRFQ'])->name('rfq.reuse');
                 Route::get('rfq-details/{rfq_id}', [ActiveRFQController::class, 'rfq_details'])->name('rfq.details');
+                Route::post('rfq-details/get-indent-api-branches', [ActiveRFQController::class, 'getIndentAPIBranches'])->name('rfq.active.get-indent-api-branches');
                 Route::post('close-rfq', [ActiveRFQController::class, 'closeRFQ'])->name('rfq.close');
                 Route::post('edit-rfq', [ActiveRFQController::class, 'editRFQ'])->name('rfq.edit');
 
@@ -149,6 +153,7 @@ Route::name('buyer.')->group(function () {
                 Route::get('cis-sheet/{rfq_id}/vendors', [CISController::class, 'getVendorsAjax'])->name('rfq.cis-sheet.vendors');
                 Route::post('last-cis-po', [CISController::class, 'last_cis_po'])->name('rfq.cis.last-cis-po');
                 Route::get('cis-sheet/{rfq_id}/ajax-load-more', [CISController::class, 'ajaxLoadMore'])->name('rfq.cis-sheet.ajax-load-more');
+                Route::post('cis/update-freight', [CISController::class, 'updateFreight'])->name('rfq.cis.update-freight');
 
                 Route::get('counter-offer/{rfq_id}', [CISController::class, 'counter_offer'])->name('rfq.counter-offer');
                 Route::get('quotation-received/{rfq_id}/{vendor_id}', [CISController::class, 'quotation_received'])->name('rfq.quotation-received');
@@ -230,6 +235,8 @@ Route::name('buyer.')->group(function () {
                 Route::post('compose/delete-edited-rfq', [RFQComposeController::class, 'deleteEditedRFQ'])->name('rfq.delete-edited-rfq');
                 Route::post('compose/rfq/search-vendors', [RFQComposeController::class, 'searchVendors'])->name('rfq.search-vendors');
                 Route::post('compose/rfq/add-vendor-to-rfq', [RFQComposeController::class, 'addVendorToRFQ'])->name('rfq.add-vendor-to-rfq');
+                Route::post('compose/rfq/get-indent-api-branches', [RFQComposeController::class, 'getIndentAPIBranches'])->name('rfq.get-indent-api-branches');
+
                 Route::post('compose/rfq-compose', [ComposeRFQController::class, 'composeRFQ'])->name('rfq.compose');
                 Route::post('compose/rfq-update', [ComposeRFQController::class, 'updateRFQ'])->name('rfq.update');
 
@@ -243,6 +250,7 @@ Route::name('buyer.')->group(function () {
                 Route::post('remind-to-vendor', [CISController::class, 'remind_to_vendor'])->name('rfq.remind-to-vendor');
 
                 Route::post('cis/save-approval', [CISController::class, 'saveApproval'])->name('cis.approval.save');
+                Route::post('cis/toggle-approval-request', [CISController::class, 'toggleApprovalRequest'])->name('cis.approval.toggle-request');
                 Route::post('cis/save-technical-approval', [TechnicalApprovalController::class, 'save'])->name('cis.technical-approval.save');
             });
 
@@ -319,7 +327,7 @@ Route::name('buyer.')->group(function () {
 
                         Route::get('/data', [InventoryController::class, 'getData'])->name('data');
                         Route::post('/export', [InventoryController::class, 'exportInventoryData'])->name('exportData');
-                       
+
 
                         Route::get('exportTotal',  [InventoryController::class,'exportTotalInventoryData'])->name('exportTotal');
                         Route::get('exportBatch',  [InventoryController::class,'exportBatchInventoryData'])->name('exportBatch');
@@ -341,8 +349,11 @@ Route::name('buyer.')->group(function () {
 
                     //get pass modal route\
                     Route::get('/check-po-pending', [InventoryController::class, 'checkPoPending'])->name('inventory.checkPoPending');
+                    Route::get('/show-product-name-list', [InventoryController::class, 'showProductNameList'])->name('inventory.showProductNameList');
+                    Route::get('/getpass-download/{getPassId}', [GetPassController::class, 'downloadPdf']) ->name('getpass.download');
                     Route::post('/get-pass/store', [GetPassController::class, 'store'])->name('getpass.store');
 
+                    Route::post('/productLifeCycle', [InventoryController::class, 'productLifeCycle'])->name('productLifeCycle');
                     // Product Routes
                     Route::get('/search-products', [InventoryVendorProductController::class, 'search'])->name('product.search');
                     Route::post('/search-allproduct', [InventoryVendorProductController::class, 'searchAllProduct'])->name('search.allproduct');
@@ -359,7 +370,9 @@ Route::name('buyer.')->group(function () {
                         Route::post('/indentexport', [IndentController::class, 'exportIndentData'])->name('exportData');
                         Route::post('/approve/{id}', [IndentController::class, 'approve'])->name('approve');
                         Route::get('/search-inventory', [IndentController::class, 'searchInventory'])->name('searchInventory');
-                        Route::get('/getMultiIndentData', [IndentController::class, 'getMultiIndentData'])->name('getMultiIndentData');
+                        Route::post('/bulkApprove', [IndentController::class, 'bulkApprove'])->name('bulkApprove');
+                        Route::post('/getMultiIndentData', [IndentController::class, 'getMultiIndentData'])->name('getMultiIndentData');
+                        //Route::get('/getMultiIndentData', [IndentController::class, 'getMultiIndentData'])->name('getMultiIndentData');
 
 
                         // Close Indent
@@ -385,7 +398,16 @@ Route::name('buyer.')->group(function () {
                         Route::get('/searchVendorByVendorname', [ManualPOController::class, 'searchVendorByVendorname'])->name('search.vendors');
                         Route::get('/getVendorDetailsByName', [ManualPOController::class, 'getVendorDetailsByName'])->name('get.vendordetails');
                     });
-
+                    // Force Closure
+                    Route::prefix('forceClosure')->name('forceClosure.')->group(function () {
+                        Route::post('/fetchInventory', [ForceClosureController::class,'fetchInventoryDetails'])->name('fetchInventory');
+                        Route::post('/store', [ForceClosureController::class,'store'])->name('store');
+                    });
+                    // WorkOrder
+                    Route::prefix('workOrder')->name('workOrder.')->group(function () {
+                        Route::get('/usercurrency',  [WorkOrderController::class,'userCurrency'])->name('userCurrency');
+                        Route::post('/store', [WorkOrderController::class,'store'])->name('store');
+                    });
                     // Issued to
                     Route::prefix('issued_to')->name('issued.')->group(function () {
                         Route::get('/getissuedto', [IssuedController::class, 'getissuedto'])->name('getissuedto');
@@ -417,17 +439,20 @@ Route::name('buyer.')->group(function () {
 
                         Route::get('indent', [ReportsController::class, 'index'])->name('indent');
                         Route::get('closeindent',  [ReportsController::class, 'index'])->name('closeindent');
+                        Route::get('consume',  [ReportsController::class,'index'])->name('consume');
                         Route::get('issued',  [ReportsController::class, 'index'])->name('issued');
                         Route::get('issuereturn',  [ReportsController::class, 'index'])->name('issuereturn');
                         Route::get('manualpo',  [ReportsController::class, 'index'])->name('manualpo');
                         Route::get('stockLedger',  [ReportsController::class, 'index'])->name('stockLedger');
                         Route::get('grn',  [ReportsController::class, 'index'])->name('grn');
+                        Route::get('getPass',  [ReportsController::class,'index'])->name('getPass');
                         Route::get('pendingGrn',  [ReportsController::class, 'index'])->name('pendingGrn');
                         Route::get('currentStock',  [ReportsController::class, 'index'])->name('currentStock');
                         Route::get('stockReturn',  [ReportsController::class, 'index'])->name('stockReturn');
                         Route::get('pendingGrnStockReturn',  [ReportsController::class, 'index'])->name('pendingGrnStockReturn');
                         Route::get('deadStock',  [ReportsController::class, 'index'])->name('deadStock');
                         Route::get('minQty',  [ReportsController::class,'index'])->name('minQty');
+                        Route::get('workOrder',  [ReportsController::class,'index'])->name('workOrder');
 
                         // Min Qty Report
                         Route::prefix('minQty')->group(function () {
@@ -442,6 +467,13 @@ Route::name('buyer.')->group(function () {
                             Route::get('/fetchlistdata',  [ProductWiseStockLedgerController::class, 'fetchData'])->name('listdata');
                             Route::get('/{id}',  [ProductWiseStockLedgerController::class, 'index'])->name('index');
                             Route::post('excel', [ProductWiseStockLedgerController::class, 'export'])->name('export');
+                        });
+
+                        // Get Pass Report
+                        Route::prefix('getPass')->group(function () {
+                            Route::get('listdata', [GetPassController::class,'gatePassReportlistdata'])->name('getPass.listdata');                    
+                            Route::get('exportTotal',  [GetPassController::class,'exportTotalGetPassReport'])->name('getPass.exportTotal');
+                            Route::get('exportBatch',  [GetPassController::class,'exportBatchGetPassReport'])->name('getPass.exportBatch');
                         });
 
                         // Stock ledger Report
@@ -481,6 +513,13 @@ Route::name('buyer.')->group(function () {
                             Route::post('excel', [IssuedController::class, 'export'])->name('issuedExport');
                             Route::get('exportTotal',  [IssuedController::class,'exportTotal'])->name('exportTotalIssued');
                             Route::get('exportBatch',  [IssuedController::class,'exportBatch'])->name('exportBatchIssued');
+                        });
+
+                        // Consume Report
+                        Route::prefix('consume')->group(function () {
+                            Route::get('listdata', [IssuedController::class,'getConsumeListData'])->name('consume.listdata');
+                            Route::get('exportTotal',  [IssuedController::class,'exportTotalConsume'])->name('consume.exportTotalConsume');
+                            Route::get('exportBatch',  [IssuedController::class,'exportBatchConsume'])->name('consume.exportBatchConsume');
                         });
 
                         // Issued Return Report
@@ -536,6 +575,13 @@ Route::name('buyer.')->group(function () {
                         Route::get('stockReturn/exportBatch', [StockReturnController::class,'exportBatch'])->name('exportBatchStockReturn');
                         Route::post('stockReturn/data', [StockReturnController::class, 'fetchStockReturnRowdata'])->name('fetchStockReturnRowdata');
                         Route::post('stockReturn/updatedata', [StockReturnController::class, 'editStockReturnRowdata'])->name('editStockReturnRowdata');
+                        // Work Order Report
+                        Route::prefix('workOrder')->group(function () {
+                            Route::get('listdata',  [WorkOrderController::class,'listdata'])->name('workOrder.listdata');
+                            Route::get('exportTotal',  [WorkOrderController::class,'exportTotal'])->name('workOrder.exportTotal');
+                            Route::get('exportBatch',  [WorkOrderController::class,'exportBatch'])->name('workOrder.exportBatch');
+                            Route::get('/download/{id}',[WorkOrderController::class,'download'])->name('workOrder.download');
+                        });
                     });
 
                     //Add grn
@@ -566,14 +612,23 @@ Route::name('buyer.')->group(function () {
                         Route::post('get-rfq-list', 'getRfqList')->name('apiIndent.getRfqList');
                         Route::post('generate-rfq', 'generateRFQ')->name('apiIndent.generateRFQ');
                         Route::post('delete-indent-api', 'deleteIndent')->name('apiIndent.deleteIndent');
-
+                        Route::get('extra-header-response-data', 'extraHeaderResponseData')->name('apiIndent.extraHeaderResponseData');
+                        Route::post('extra-header-response-save-data', 'extraHeaderResponseSaveData')->name('apiIndent.extraHeaderResponseSaveData');
+                        Route::post('extra-header-response-edit-data/{id}', 'extraHeaderResponseEditData')->name('apiIndent.extraHeaderResponseEditData');
+                        Route::post('extra-header-response-update-data', 'extraHeaderResponseUpdateData')->name('apiIndent.extraHeaderResponseUpdateData');
+                        Route::post('extra-header-response-list-data', 'extraHeaderResponseListData')->name('apiIndent.extraHeaderResponseListData');
+                        Route::delete('extra-header-response-delete-data/{id}', 'extraHeaderResponseDeleteData')->name('apiIndent.extraHeaderResponseDeleteData');
+                        Route::post('get-extra-header-response-suggestion', 'getExtraHeaderResponseSuggestion')->name('apiIndent.getExtraHeaderResponseSuggestion');
+                        Route::get('export-order-response/{api_order_no}', 'downloadOrderInfoTxt')->name('apiIndent.downloadOrderInfoTxt');
+                        // Route::post('send-indent-api-order-data/{id}', 'getOrderInfo')->name('apiIndent.apiUrlResponse');
 
                         Route::get('export-indent-data-total', 'exportTotal')->name('apiIndent.exportTotal');
                         Route::get('export-indent-data-batch', 'exportIndentData')->name('apiIndent.exportBatch');
 
                         Route::get('/search-products', 'searchProduct')->name('apiIndent.searchProduct');
                         Route::post('store-header-text-value', [ApiIndentController::class, 'saveHeaderText'])->name('apiIndent.saveHeaderText');
-                        Route::post('store-header-condition-value', [ApiIndentController::class, 'saveHeaderConditions'])->name('apiIndent.saveHeaderConditions');
+
+                        Route::post('store-header-condition-value', [ApiIndentController::class, 'saveHeaderConditions'])->name('apiIndent.saveHeaderConditions'); //  unuse hai
                     });
                 });
             });

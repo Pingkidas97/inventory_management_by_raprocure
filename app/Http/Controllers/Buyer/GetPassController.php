@@ -283,18 +283,18 @@ class GetPassController extends Controller
     public function downloadPdf($getPassId)
     {
         $folderPath = storage_path("app/public/gatepass");
-
+        
         if (!File::exists($folderPath)) {
             File::makeDirectory($folderPath, 0777, true, true);
         }
 
         $filePath = $folderPath . "/GatePass_$getPassId.pdf";
 
-        if (!file_exists($filePath)) {
-            $orders = GetPass::where('get_pass_id', $getPassId)->get();
-
+        if (file_exists($filePath)) {
+            $orders = GetPass::with(['inventory.branch'])->where('get_pass_id', $getPassId)->get();
+             
             $pdf = Pdf::loadView('buyer.inventory.downloadGatePass', compact('orders'))
-                ->setPaper('A4', 'portrait');
+                 ->setPaper('A4', 'portrait');
 
             file_put_contents($filePath, $pdf->output());
         }
@@ -513,7 +513,10 @@ class GetPassController extends Controller
             $currencySymbol = session('user_currency')['symbol'] ?? '₹';
             return [
                 'get_pass_no' => $getPass->get_pass_no,
-                'get_pass_id' => $getPass->get_pass_id,
+                'get_pass_id' => '<a href="'.route('buyer.getpass.download', $getPass->get_pass_id).'" 
+                    class="text-primary" target="_blank" style="color:#000 !important;">
+                    '.$getPass->get_pass_id.'
+                  </a>',
                 'product' => optional($getPass->inventory->product)->product_name ?? optional($getPass->inventory)->buyer_product_name,
                 'buyer_product_name' => optional($getPass->inventory)->buyer_product_name ?? '',
                 'specification' => TruncateWithTooltipHelper::wrapTextSS(cleanInvisibleCharacters($getPass->inventory->specification)),

@@ -83,35 +83,32 @@
     // Numeric only + max per row
     $(document).on('input', '.bulkIssueQty', function () {
         let $row = $(this).closest('tr');
-
-        // Get the selected "Issued From" option in this row
         let $issueFrom = $row.find('select[name="issued_from[]"] option:selected');
-        let maxQty = parseFloat($issueFrom.data('stockqty')) || 0;
 
-        // Round maxQty to 3 decimals to avoid floating point issues
+        let maxQty = parseFloat($issueFrom.data('stockqty')) || 0;
         maxQty = Math.round(maxQty * 1000) / 1000;
 
-        // Get current value
         let val = this.value;
 
-        // Remove any non-numeric characters except decimal
         val = val.replace(/[^0-9.]/g, '');
 
-        // Limit to 3 decimal places
-        if (/^\d*\.?\d{0,3}$/.test(val) === false) {
-            val = val.slice(0, -1);
+        if ((val.match(/\./g) || []).length > 1) {
+            val = val.replace(/\.(?=.*\.)/g, '');
         }
 
-        // Parse to float and round to 3 decimals
-        let numericVal = parseFloat(val) || 0;
-        numericVal = Math.round(numericVal * 1000) / 1000;
-
-        // Enforce max quantity
-        if (numericVal > maxQty) {
-            numericVal = maxQty;
+        if (val.includes('.')) {
+            let parts = val.split('.');
+            parts[1] = parts[1].slice(0, 3);
+            val = parts[0] + '.' + parts[1];
         }
 
-        this.value = numericVal;
+        let numericVal = parseFloat(val);
+
+        if (!isNaN(numericVal) && numericVal > maxQty) {
+            val = maxQty.toString();
+        }
+
+        this.value = val;
     });
 
     let isSubmitting = false;
@@ -220,8 +217,8 @@
                 return;
             }
 
-            const formData = $(this).serialize();
-
+            const formData = $('#addIssueForm').serialize();
+            console.log(formData);
             $.ajax({
                 url: "{{ route('buyer.issue.store') }}",
                 type: "POST",

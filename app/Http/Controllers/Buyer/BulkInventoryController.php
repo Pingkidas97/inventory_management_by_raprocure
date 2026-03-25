@@ -17,6 +17,7 @@ use App\Traits\TrimFields;
 use App\Traits\HasModulePermission;
 use App\Http\Controllers\Buyer\InventoryController;
 use App\Http\Controllers\Buyer\BulkRFQController;
+use App\Rules\NoSpecialCharacters;
 class BulkInventoryController extends Controller
 {
     use TrimFields;
@@ -387,12 +388,12 @@ class BulkInventoryController extends Controller
         if ($Product_Name || $Our_Product_Name) {
             //$prod = $final_prod_data[$Product_Name];
 
-            $vals['Product_Specification'] = substr($this->sanetiz_all_string_data($vals['Product_Specification'], "encode") ?? '', 0, 2900);
-            $vals['Product_Size'] = substr($this->sanetiz_all_string_data($vals['Product_Size'], "encode") ?? '', 0, 1450);
+            $vals['Product_Specification'] = substr($vals['Product_Specification'] ?? '', 0, 2900);
+            $vals['Product_Size'] = substr($vals['Product_Size'] ?? '', 0, 1450);
             $vals['Brand'] = substr($vals['Brand'] ?? '', 0, 100);
-            $vals['Our_Product_Name'] = substr($this->sanetiz_all_string_data($vals['Our_Product_Name'],"encode") ?? '', 0, 100);
-            $vals['Inventory_Grouping'] = substr($this->sanetiz_all_string_data($vals['Inventory_Grouping'],"encode") ?? '', 0, 100);
-            $vals['Cost_Center'] = substr($this->sanetiz_all_string_data($vals['Cost_Center'],"encode") ?? '', 0, 100);
+            $vals['Our_Product_Name'] = substr($vals['Our_Product_Name'] ?? '', 0, 100);
+            $vals['Inventory_Grouping'] = substr($vals['Inventory_Grouping'] ?? '', 0, 100);
+            $vals['Cost_Center'] = substr($vals['Cost_Center'] ?? '', 0, 100);
             $vals['Product_id'] = $final_prod_id ?? '';
             $vals['catid'] = $final_cat_id ?? '';
             $vals['divid'] = $final_div_id ?? '';
@@ -604,17 +605,17 @@ class BulkInventoryController extends Controller
             $request = $this->trimAndReturnRequest($request);
 
             $validated = $request->validate([
-                'Product_Name'           => 'nullable|string|max:255',
-                'Product_Specification'  => 'nullable|string|max:255',
-                'Product_Size'           => 'nullable|string|max:100',
+                'Product_Name'           => ['nullable|string|max:255', new NoSpecialCharacters(false)],
+                'Product_Specification'  => ['nullable|string|max:255', new NoSpecialCharacters(true)],
+                'Product_Size'           => ['nullable|string|max:100', new NoSpecialCharacters(true)],
                 'Opening_Stock'          => 'nullable|numeric',
                 'Product_UOM'            => 'required|string|max:50',
                 'Stock_Price'            => 'nullable|numeric',
                 'Brand'                  => 'nullable|string|max:100',
-                'Our_Product_Name'       => 'nullable|string|max:255',
-                'Inventory_Grouping'     => 'nullable|string|max:255',
-                'Cost_Center'            => 'nullable|string|max:255',
-                'Inventory_Type'         => 'nullable|string|max:100',
+                'Our_Product_Name'       => ['nullable|string|max:255', new NoSpecialCharacters(false)],
+                'Inventory_Grouping'     => ['nullable|string|max:255', new NoSpecialCharacters(false)],
+                'Cost_Center'            => ['nullable|string|max:255', new NoSpecialCharacters(false)],
+                'Inventory_Type'         => ['nullable|string|max:255', new NoSpecialCharacters(false)],
                 'Set_Min_Qty_for_Indent' => 'nullable|numeric',
                 'Product_id'             => 'nullable|numeric',
                 'catid'                  => 'nullable|numeric',
