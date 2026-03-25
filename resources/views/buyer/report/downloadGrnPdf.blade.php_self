@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>GRN PDF</title>
+    <style>
+        body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
+        h2 { margin-bottom: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #000; padding: 6px; text-align: left; font-size: 11px; }
+        th { background: #f0f0f0; white-space: nowrap; }
+        .small-text { font-size: 10px; }
+        .right { text-align: right; }
+        .nowrap {white-space : nowrap;}
+    </style>
+</head>
+<body>
+    <h2>{{ $grn['buyer_name'] }}</h2>
+    <h2>GRN No: {{ $grn['grn_no'] }}</h2>
+
+    <table>
+        <tr>
+            <th>Bill Date</th>
+            <th>Vendor Invoice No</th>
+            <th>Transporter Name</th>
+            <th>Vehicle No / LR No</th>
+            <th>Gross Weight</th>
+            <th>Freight & Other Charges</th>
+            <th>Approved By</th>
+        </tr>
+        <tr>
+            <td>{{ $grn['bill_date'] ?? '-' }}</td>
+            <td>{{ $grn['vendor_invoice_no'] ?? '-' }}</td>
+            <td>{{ $grn['transporter_name'] ?? '-' }}</td>
+            <td>{{ $grn['vehicle_no_lr_no'] ?? '-' }}</td>
+            <td>{{ $grn['gross_wt'] ?? '-' }}</td>
+            <td>{{ $grn['frieght_other_charges'] ?? '-' }}</td>
+            <td>{{ $grn['approved_by'] ?? '-' }}</td>
+        </tr>
+    </table>
+
+    <h3 style="margin-top:15px;">Order Details</h3>
+    <table>
+        <tr>
+            <th>Order No</th>
+            <th>Order Date</th>
+            <th>Vendor</th>
+            <th>Product</th>
+            <th>Size</th>
+            <th>Specification</th>
+            <th>Product Order Qty</th>
+            <th>GRN Qty</th>
+            <th>Rate</th>
+            <th>Amount</th>
+            <th>GST</th>
+        </tr>
+        
+        @foreach($grn['order_details'] as $order)
+       
+            <tr>
+                <td>{{ $order['order_no'] ?? '-' }}</td>
+                <td>{{ $order['order_date'] ?? '-' }}</td>
+                <td>{{ $order['vendor'] ?? '-' }}</td>
+                <td>{{ $order['product'] ?? '-' }}</td>
+                <td>{!! $order['size'] ?? '-' !!}</td>
+                <td>{!! $order['specification'] ?? '-' !!}</td>
+                <td class="right">{{ $order['product_order_qty'] ?? '-' }}</td>
+                <td class="right">{{ $order['grn_qty'] ?? '-' }}</td>
+                <td class="right nowrap">{{ isset($order['rate']) ? str_replace('रु', 'NPR', $order['rate']) : '-' }}</td>
+                <td class="right nowrap">{{ isset($order['amount']) ? str_replace('रु', 'NPR', $order['amount']) : '-' }}</td>
+                <td class="right nowrap">{{ $order['gst_no'] ?? '-' }}</td>
+            </tr>
+        @endforeach
+            <tr>
+                <td colspan = '9' class="right"> Total </td>
+                <td class="right nowrap">{{$grn['total_amount']}}</td>
+                <td class="right nowrap">{{$grn['total_gst']}}</td>
+            </tr>
+    </table>
+
+    <table style="margin-top:20px;">
+        <tr>
+            <td colspan="11" class="right small-text">
+                GENERATED THROUGH 
+                @php
+                    $path = public_path('assets/images/rfq-logo.png');
+                    $type = pathinfo($path, PATHINFO_EXTENSION);
+                    $data = file_get_contents($path);
+                    $base64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
+                @endphp
+                <img src="{{ $base64 }}" alt="raProcure" style="max-width: 15%; vertical-align: middle;">
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

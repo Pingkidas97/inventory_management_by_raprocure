@@ -1,0 +1,181 @@
+
+$(document).ready(function() {
+    if (typeof $.fn.DataTable !== "function") {
+        toastr.error("DataTables is not loaded! Check script order!");
+        return;
+    }
+    report_list_data();
+    $('#branch_id, #search_product_name, #search_category_id, #search_is_active').on('change keyup', function() {
+        $('#report-table').DataTable().ajax.reload();
+    });
+});
+
+function report_list_data() {
+    $('#report-table').DataTable({
+        processing  : true,
+        serverSide  : true,
+        searching   : false,
+        paging      : true,
+        scrollY     : 300,
+        scrollX     : true,
+        pageLength  : 25,
+        destroy: true,
+        createdRow: function(row) {
+                // Indent Qty (col 7)
+                $('td', row).eq(7).css({
+                    "background-color": "#d1f7d6",
+                    "color": "#000",
+                    "font-weight": "bold",
+                    "white-space": "nowrap"
+                });
+                // RFQ Qty (col 8)
+                $('td', row).eq(8).css({
+                    "white-space": "nowrap"
+                });
+            },
+        ajax: {
+            url: indentreportlistdataurl,
+            data: function (d) {
+                d.branch_id                 =   $('#branch_id').val();
+                d.search_product_name       =   $('#search_product_name').val();
+                d.search_category_id        =   $('#search_category_id').val();
+                d.search_is_active          =   $('#search_is_active').val();
+                d.from_date                 =   $('#from_date').val();
+                d.to_date                   =   $('#to_date').val();
+            },
+        },
+        columns: [
+                { data: 'IndentNumber' },
+                { data: 'product', name: 'product' },
+                { data: 'buyer_product_name', name: 'buyer_product_name' },
+                { data: 'specification', name: 'specification' },
+                { data: 'size', name: 'size' },
+                { data: 'inventory_grouping', name: 'inventory_grouping' },
+                { data: 'users', name: 'users' },
+                { data: 'indent_qty', name: 'indent_qty' },
+                { data: 'rfq_qty', name: 'rfq_qty' },
+                { data: 'uom', name: 'uom' },
+                { data: 'remarks', name: 'remarks' },
+                { data: 'status', name: 'status' },
+                { data: 'updated_at', name: 'updated_at' }
+            ],
+            columnDefs: [
+                { "orderable": false, "targets": "_all" }
+            ],
+            order: [],
+            language: {
+                         processing: "<div class='spinner-border spinner-border-sm'></div> Loading..."
+                    }
+    });
+}
+// $(document).on('click', '#export', function () {
+//     let btn = $(this);
+//     let url= exportreportlistindenturl;
+//     let data= {
+//             _token                      :   $('meta[name="csrf-token"]').attr("content"),
+//             branch_id                   :   $('#branch_id').val(),
+//             search_product_name         :   $('#search_product_name').val(),
+//             search_category_id          :   $('#search_category_id').val(),
+//             search_is_active            :   $('#search_is_active').val(),
+//             from_date                   :   $('#from_date').val(),
+//             to_date                     :   $('#to_date').val()
+//         };
+//     inventoryFileExport(btn,url,data,deleteExcelUrl);
+// });
+// Excel Export Script
+$(document).ready(function() {
+    $('#export').on('click', function() {
+        const exporter = new Exporter({
+        chunkSize: 100,
+        rowLimitPerSheet: 200000,
+        headers: ['Indent Number','Branch','Product Name','Our Product Name','Specification','Size','Inventory Grouping','User', 'Indent Quantity','UOM', 'Remarks','Status','Added Date',],
+        totalUrl: exportTotalIndentreportDataurl,
+        batchUrl: exportBatchIndentreportDataUrl,
+        token: "{{ csrf_token() }}",
+        exportName: "Indent_Report_",
+        expButton: '#export',
+        exportProgress: '#export-progress',
+        progressText: '#progress-text',
+        progress: '#progress',
+        fillterReadOnly: '.fillter-form-control',
+        getParams: function() {
+            $('#search_product_name, #search_category_id, #from_date,#to_date,#branch_id,#search_is_active').prop('disabled', true);
+            $('button').prop('disabled', true);
+            return {
+                branch_id                   :   $('#branch_id').val(),
+                search_product_name         :   $('#search_product_name').val(),
+                search_category_id          :   $('#search_category_id').val(),
+                search_is_active            :   $('#search_is_active').val(),
+                from_date                   :   $('#from_date').val(),
+                to_date                     :   $('#to_date').val()
+            };
+        },
+    });
+    exporter.start();
+    const watcher = setInterval(function () {
+        if ($('#export-progress').is(':hidden')) {
+            enableFilters();
+            clearInterval(watcher);
+        }
+    }, 100);
+});
+
+$('#export-progress').hide();
+
+});
+function enableFilters() {
+    $('#export-progress').hide();
+    $('#search_product_name, #search_category_id,#from_date, #to_date, #branch_id,#search_is_active')
+        .prop('disabled', false);
+    $('button').prop('disabled', false);
+}
+// Excel Export Script
+$('#showreportmodal').click(function (e) {
+    e.preventDefault();
+    $('#reportModal').modal('show');
+});
+
+//active rfq pop up
+function activeIndentRfqPopUP(indentId) {
+    const url = activeRfqUrl.replace('__ID__', indentId);
+    fetch(url, {
+    method: 'GET',
+    headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+    }})
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 1) {
+                $('#rfqdetailsTable tbody').empty();
+
+                data.data.forEach(function (item) {
+                    let viewUrl = activeRfqDetailsbyIdUrl.replace('__RFQ_ID__', item.rfq_id);
+                    let row = `
+                        <tr>
+                            <td>${item.rfq_no}</td>
+                            <td>${item.rfq_date}</td>
+                            <td>${item.rfq_closed}</td>
+                            <td>${item.used_indent_qty}</td>
+                            <td>
+                                <a href="${viewUrl}" target="_blank">
+                                    <i class="bi bi-eye-fill"></i> View Details
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                    $('#rfqdetailsTable tbody').append(row);
+                });
+
+                $("#ActiveRfqDetailsModal").modal("show");
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching RFQ details:', error);
+            toastr.error('Something went wrong.');
+        });
+}
+
+

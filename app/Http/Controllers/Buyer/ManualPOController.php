@@ -1,0 +1,767 @@
+<?php
+
+namespace App\Http\Controllers\Buyer;
+
+
+use App\Http\Controllers\Controller;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\{Auth, Validator};
+use Carbon\Carbon;
+
+use App\Models\{Tax, User, Vendor, ManualOrder, Inventories, ManualOrderProduct, Grn, Currency};
+use App\Helpers\{NumberFormatterHelper, TruncateWithTooltipHelper};
+use App\Http\Controllers\Buyer\InventoryController;
+
+use App\Exports\ManualPoReportExport;
+use App\Mail\ManualOrderConfirmationMail;
+use Illuminate\Support\Facades\Mail;
+use Exception;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\ExportService;
+use App\Rules\NoSpecialCharacters;
+use App\Traits\TrimFields;
+use Illuminate\Support\Facades\DB;
+use App\Helpers\EmailHelper;
+
+
+
+class ManualPOController extends Controller
+{
+    use TrimFields;
+    public function __construct(protected ExportService $exportService) {}
+    public static function userCurrency(): void
+    {
+        $userId = Auth::user()->parent_id ?: Auth::id();
+        $currencyId = User::find($userId)->currency ==0? 1: User::find($userId)->currency;
+        $currency = Currency::find($currencyId);
+
+        session(['user_currency' => [
+            'id' => $currency->id,
+            'symbol' => $currency->currency_symbol
+        ]]);
+    }
+
+    public function fetchInventoryDetails(Request $request)
+    {
+        $this->userCurrency();
+        $currencies =[];
+        $currency_symbol='';
+        $userId=(Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+        $buyer_country = User::with('buyer.buyer_country')->find($userId)->buyer?->buyer_country?->id ?? 0;
+        // if($buyer_country=='101'){
+        //     $currency_symbol=session('user_currency')['symbol'] ?? '₹';
+        //     $currency_id = User::find($userId)->currency ==0? 1: User::find($userId)->currency;
+        //     $currencies = Currency::select('id','currency_symbol')->where('id', $currency_id)->get()->toArray();
+        // }else{
+        // $currency_symbol='';
+        $currency_symbol=session('user_currency')['symbol'] ?? '₹';
+        $currency_id = User::find($userId)->currency ==0? 1: User::find($userId)->currency;
+        $currencies = Currency::select('id', 'currency_symbol','currency_name')->get();
+        // $currencies = Currency::select('id', 'currency_symbol')->get();
+        // }
+        $inventoryIds = $request->input('ids', []);
+
+        if (empty($inventoryIds)) {
+            return response()->json(['status' => 'error', 'message' => 'No inventory IDs provided'], 400);
+        }
+
+        $inventories = Inventories::select('inventories.*')
+            ->leftjoin('products', 'products.id', '=', 'inventories.product_id')
+            ->with(['product:id,product_name', 'uom:id,uom_name'])
+            ->whereIn('inventories.id', $inventoryIds)
+            ->orderBy('products.product_name', 'asc')
+            ->orderBy('inventories.created_at', 'desc')
+            ->orderBy('inventories.updated_at', 'desc')
+            ->get();
+
+        if ($inventories->isEmpty()) {
+            return response()->json(['status' => 'error', 'message' => 'No inventories found'], 404);
+        }
+        foreach ($inventories as $inv) {
+            if (!empty($inv->specification)) {
+                $inv->specification =TruncateWithTooltipHelper::wrapText(cleanInvisibleCharacters($inv->specification));
+            }
+
+            if (!empty($inv->size)) {
+                $inv->size = TruncateWithTooltipHelper::wrapText(cleanInvisibleCharacters($inv->size));
+            }
+        }
+        $taxes = Tax::where('status', '1')->get(['id', 'tax']);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'inventories' => $inventories,
+                'taxes' => $taxes,
+                'currency_symbol' => $currency_symbol,
+                'currencies' => $currencies,
+            ]
+        ]);
+    }
+
+    public function searchVendorByVendorname(Request $request)
+    {
+        $query = $request->input('q');
+
+        if (strlen($query) < 3) {
+            return response()->json([]);
+        }
+        $company_id = getParentUserId();
+        $blacklisted_vendors = DB::table('buyer_preferences')
+            ->where('buyer_user_id', $company_id)
+            ->where('fav_or_black', 2) // 2 = Blacklisted
+            ->pluck('vend_user_id')
+            ->toArray();
+        $results = collect();
+
+        Vendor::with('user')
+            ->whereHas('user', function ($q) use ($blacklisted_vendors){
+                $q->where('is_profile_verified', 1)
+                ->where('is_verified', 1)
+                ->where('user_type', 2)
+                ->whereNotIn('user_id', $blacklisted_vendors)
+                ->where('status', 1);
+            })
+            ->where('legal_name', 'like', "%{$query}%")
+            ->select('legal_name', 'user_id')
+            ->chunk(500, function ($vendors) use (&$results) {
+                $results = $results->concat(
+                    $vendors->map(function ($vendor) {
+                        return [
+                            'id'     => $vendor->user_id,
+                            'name'  => $vendor->legal_name,
+                        ];
+                    })
+                );
+            });
+
+        return response()->json($results->values());
+    }
+
+    public function getVendorDetailsByName(Request $request){
+        $userId = $request->input('id'); // assuming `id` = user_id
+
+        if (!$userId) {
+            return response()->json(['message' => 'User ID is required.'], 400);
+        }
+        $vendor = Vendor::where('user_id', $userId)
+        ->with(['user', 'vendor_country', 'vendor_state', 'vendor_city'])
+        ->first();
+
+        if (!$vendor) {
+            return response()->json(['message' => 'Vendor not found'], 404);
+        }
+        $vendor_country=$vendor->vendor_country?->id;
+        $user=User::with('buyer.buyer_country')->find(getParentUserId());
+        $buyer_country= $user->buyer?->buyer_country?->id ?? 0;
+        $buyer_currency=$user->currency==0? 1 : $user->currency;
+
+        $currency_field_readonly = false;
+        if(($vendor_country == $buyer_country) && ($buyer_country ==101) && ($buyer_currency == '1' || $buyer_currency == '0')){
+            $currency_field_readonly = true;
+        }
+        return response()->json([
+            // 'name' => $vendor->user->name ?? '',
+            'name' => $vendor->legal_name ?? '',
+            'email' => $vendor->user->email ?? '',
+            'mobile' => ($vendor->vendor_country?->phonecode && $vendor->user?->mobile) ? '+' .$vendor->vendor_country->phonecode . ' ' . $vendor->user->mobile : 'N/A',
+            'address' => $vendor->registered_address ?? '',
+            'pincode' => $vendor->pincode ?? '',
+            'city' => $vendor->vendor_city->city_name ?? '',
+            'state' => $vendor->vendor_state->name ?? '',
+            // 'state_code' => $vendor->vendor_state->state_code ?? '',
+            'state_code' => $vendor->vendor_country && $vendor->vendor_country->id == 101? substr($vendor->gstin ?? '', 0, 2) : '',
+            'country' => $vendor->vendor_country->name ?? '',
+            'gstin' => $vendor->gstin ?? '',
+            'country_code' => $vendor->country_code ?? '',
+            'legal_name' => $vendor->legal_name ?? '',
+            'currency_field_readonly' => $currency_field_readonly,
+            'currency_id' => $buyer_currency,
+        ]);
+
+    }
+
+    public function store(Request $request)
+    {
+        $request = $this->trimAndReturnRequest($request);
+        $request->validate([
+            'vendor_user_id'     => ['required', 'exists:users,id'],
+            'mo_created_date'     => ['required'],
+            'currency_id'        => ['required', 'exists:currencies,id'],
+            'inventory_id'       => ['required', 'array'],
+            'inventory_id.*'     => ['required', 'exists:inventories,id'],
+
+            'qty'                => ['required', 'array'],
+            'qty.*'              => ['required', 'numeric', 'min:0.001', new NoSpecialCharacters(false)],
+
+            'rate'               => ['required', 'array'],
+            'rate.*'             => ['required', 'numeric', 'min:0.01', new NoSpecialCharacters(false)],
+
+            'mrp'               => ['array'],
+            'mrp.*'             => ['sometimes', 'nullable','numeric', new NoSpecialCharacters(false)],
+
+            'disc'               => ['array'],
+            'disc.*'             => ['sometimes', 'nullable','numeric','max:100', new NoSpecialCharacters(false)],
+
+            'gst'                => ['required', 'array'],
+            'gst.*'              => ['required', 'exists:taxes,id'],
+
+            'paymentTerms'       => ['required', 'string', 'max:2000', new NoSpecialCharacters(false)],
+            'priceBasis'         => ['required', 'string', 'max:2000', new NoSpecialCharacters(false)],
+            'deliveryPeriod'     => ['required', 'numeric', 'min:1', 'max:999', new NoSpecialCharacters(false)],
+
+            'remarks'            => ['nullable', 'string', 'max:3000', new NoSpecialCharacters(true)],
+            'additionalRemarks'  => ['nullable', 'string', 'max:3000', new NoSpecialCharacters(true)],
+        ]);
+
+        $request->merge([
+            'rate' => array_map(function ($r) {
+                return preg_match('/^\.\d+$/', $r) ? ('0'.$r) : $r;
+            }, $request->rate),
+            'qty' => array_map(function ($r) {
+                return preg_match('/^\.\d+$/', $r) ? ('0'.$r) : $r;
+            }, $request->qty)
+        ]);
+
+        try {
+            DB::beginTransaction();
+            $userId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+            $user = User::with('buyer')->find($userId);
+            $orgShortCode = $user->buyer->organisation_short_code ?? 'ORG';
+            $year = date('y');
+            $lastPoNumber = ManualOrder::where('buyer_id', $userId)
+                            ->orderBy('id', 'desc')
+                            ->value('manual_po_number');
+            $parts = explode('-', $lastPoNumber);
+            // $lastNumber = (int)!empty($parts)?end($parts):0;
+            $lastNumber = 0;
+            if (!empty($parts) && is_numeric(end($parts))) {
+                $lastNumber = (int) end($parts);
+            }
+            $manualPoNumber = 'MO-' . $orgShortCode . '-' . $year . '-' . sprintf('%03d', $lastNumber+1);
+            foreach ($request->rate as $index => $rate) {
+
+                // save cleaned rate back
+                $rate=$request->rate[$index];
+
+                // Validate DB double(10,2)
+                if (!preg_match('/^\d{1,8}(\.\d{1,2})?$/', $rate)) {
+                    return response()->json([
+                        'status' => '2',
+                        'message' => 'Rate on row ' . ($index + 1) . ' is out of range. Max allowed: 99,999,999.99',
+                    ], 422);
+                }
+            }
+            $mo_created_date =  $request->mo_created_date;
+            $mo_created_date = Carbon::createFromFormat('d/m/Y', $mo_created_date)->format('Y-m-d');
+
+            // Create the manual order
+            $manualOrder = ManualOrder::create([
+                'manual_po_number'       => $manualPoNumber,
+                'vendor_id'              => $request->vendor_user_id,
+                'buyer_id'               => $userId,
+                'currency_id'            => $request->currency_id,
+                'buyer_user_id'          => Auth::user()->id,
+                'order_status'           => '1',
+                'order_price_basis'      => $request->priceBasis,
+                'order_payment_term'     => $request->paymentTerms,
+                'order_delivery_period'  => $request->deliveryPeriod,
+                'order_remarks'          => $request->remarks,
+                'order_add_remarks'      => $request->additionalRemarks,
+                'prepared_by'            => Auth::user()->id,
+                'approved_by'            => Auth::user()->id,
+                'created_at'             => $mo_created_date,
+            ]);
+
+            // Store each product
+            foreach ($request->qty as $index => $quantity) {
+                $gstRate = Tax::find($request->gst[$index])?->tax ?? 0;
+                $totalAmount = $quantity * $request->rate[$index] * (1 + ($gstRate / 100));
+                $prodId = Inventories::where('id', $request->inventory_id[$index])->value('product_id');
+                if($prodId == null){
+                    $prodId = 0;
+                }
+                //dd($prodId);
+                ManualOrderProduct::create([
+                    'manual_order_id'      => $manualOrder->id,
+                    'product_id'           => $prodId,
+                    'inventory_id'         => $request->inventory_id[$index],
+                    'product_quantity'     => $quantity,
+                    'product_price'        => $request->rate[$index],
+                    'product_mrp'          => ($request->mrp[$index]  ?? '') === '' ? null : $request->mrp[$index],
+                    'product_disc'         => ($request->disc[$index] ?? '') === '' ? null : $request->disc[$index],
+                    'product_total_amount' => $totalAmount,
+                    'product_gst'          => $request->gst[$index],
+                ]);
+            }
+
+            // other_terms_conditions
+            $other_term_check = $request->input('other_term_check');
+            if ($other_term_check && $other_term_check == "1") {
+                $other_terms = $request->input('other_terms_textarea');
+                $other_terms = substr(cleanGlobalSpecialChar($other_terms), 0, 15600);
+                DB::table("other_terms_conditions")->insert([
+                    "buyer_id" => getParentUserId(),
+                    "buyer_user_id" => Auth::user()->id,
+                    "po_number" => $manualPoNumber,
+                    "po_type" => 2,
+                    "other_terms" => $other_terms,
+                    "created_at" => date('Y-m-d H:i:s'),
+                    "updated_at" => date('Y-m-d H:i:s')
+                ]);
+            }
+
+            DB::commit();
+            //start send mail
+            $this->sendEmail($manualPoNumber, $request, $mo_created_date);//pingki
+            //end send mail
+            //start notification
+            $notification_data = array();
+            $notification_data['po_number'] = $manualPoNumber;
+            $notification_data['message_type'] = 'Direct Order Confirmed';
+            $notification_data['notification_link'] = route('vendor.direct_order.show', $manualOrder->id);
+            $notification_data['to_user_id'] = $request->vendor_user_id;
+            sendNotifications($notification_data);
+            //end notification
+            return response()->json([
+                'status' => '1',
+                'message' => 'Manual PO generated successfully!',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'status' => '2',
+                'message' => 'Failed to generate Manual PO. ' . $e->getMessage(),
+            ]);
+        }
+    }
+    public function sendEmail_withBlade($manualPoNumber, $request)//pingki
+    {
+        $vendor = Vendor::where('user_id', $request->vendor_user_id)
+            ->with(['user', 'vendor_country', 'vendor_state', 'vendor_city'])
+            ->first();
+
+        $vendorName = $vendor->user->name;
+        $vendorAddress = $vendor->registered_address;
+        $buyername = Auth::user()->name;
+
+        $order = [
+            'order_number' => $manualPoNumber,
+            'order_date' => date('d/m/Y'),
+        ];
+
+        $items = [];
+
+        $alltotalAmount = 0;
+
+        foreach ($request->qty as $index => $quantity) {
+            $rate = $request->rate[$index];
+            $inventory = Inventories::with(['product', 'uom'])->findOrFail($request->inventory_id[$index]);
+
+            $productName = $inventory->product->product_name;
+            $uomName = $inventory->uom->uom_name;
+
+
+            $totalAmount = $quantity * $rate ;
+            $alltotalAmount += round($totalAmount, 2);
+
+            $items[] = [
+                'product_name' => $productName,
+                'quantity' => NumberFormatterHelper::formatQty($quantity,session('user_currency')['symbol'] ?? '₹'),
+                'uom' => $uomName,
+                'rate' => NumberFormatterHelper::formatCurrency($rate,session('user_currency')['symbol'] ?? '₹'),
+                'total' => NumberFormatterHelper::formatCurrency($totalAmount,session('user_currency')['symbol'] ?? '₹')
+            ];
+        }
+
+        $order['total_amount'] = NumberFormatterHelper::formatCurrency($alltotalAmount,session('user_currency')['symbol'] ?? '₹');
+        $subject = "Order Confirmed (Order No. " . $manualPoNumber . " )";
+        $body= view('buyer.inventory.manual_order_confirmation', compact('vendorName', 'buyername', 'vendorAddress', 'order', 'items'))->render();
+        $to = $vendor->user->email;
+        EmailHelper::sendMail($to, $subject, $body, $mailer='smtp');
+        // Mail::to('pingkidas.prowebhill@gmail.com')->send(
+        //     new ManualOrderConfirmationMail($vendorName, $buyername, $vendorAddress, $order, $items)
+        // );
+        // return 'Email sent!';
+    }
+
+    private function sendEmail($manualPoNumber,  $request, $mo_created_date)
+    {
+        $order = ManualOrder::where('manual_po_number', $manualPoNumber)
+                ->where('buyer_user_id', Auth::user()->id)
+                ->first();
+
+        if (!$order) {
+            return;
+        }
+        $mo_created_date = Carbon::createFromFormat('Y-m-d', $mo_created_date)->format('d/m/Y');
+        $vendor_data = Vendor::where('user_id', $request->vendor_user_id)
+            ->with(['user', 'vendor_country', 'vendor_state', 'vendor_city'])
+            ->first();
+
+        $subject = "Direct Order Confirmed (Order No. " . $order->manual_po_number . " )";
+
+        $mail_data = vendorEmailTemplet('order-confirmation-email');
+        $admin_msg = $mail_data->mail_message;
+
+        $product_data = $this->getPOVariantHTMLForMail($request,$order->manual_po_number, get_currency_str(session('user_currency')['symbol'] ?? '₹'));
+
+        $admin_msg = str_replace('$rfq_date_formate', $mo_created_date, $admin_msg);
+        // $admin_msg = str_replace('$rfq_date_formate', '', $admin_msg);
+        $admin_msg = str_replace('$rfq_number', '', $admin_msg);
+        $admin_msg = str_replace('$rfq_no', '', $admin_msg);
+        $admin_msg = str_replace('$buyer_name', session('legal_name'), $admin_msg);
+        $admin_msg = str_replace('$vendor_name', $vendor_data['legal_name'], $admin_msg);
+        $admin_msg = str_replace('$product_details', $product_data, $admin_msg);
+        $admin_msg = str_replace('$dispatch_address', '', $admin_msg);
+        $admin_msg = str_replace('$delivery_address', '', $admin_msg);
+        $admin_msg = str_replace('$order_id', $order->manual_po_number, $admin_msg);
+        $admin_msg = str_replace('$order_date', $mo_created_date, $admin_msg);
+        $admin_msg = str_replace('$website_url', route("login"), $admin_msg);
+
+        EmailHelper::sendMail($vendor_data['user']['email'], $subject, $admin_msg);
+    }
+
+    private function getPOVariantHTMLForMail($request,$po_number, $currency_symbol){
+
+        $mail_html = '';
+        $total_price = 0;
+        // if(!empty($po_variants)){
+        if(!empty($request->qty)){
+            // foreach ($po_variants as $key => $value) {
+            foreach ($request->qty as $index => $quantity) {
+                $rate = $request->rate[$index];
+                $inventory = Inventories::with(['product', 'uom'])->findOrFail($request->inventory_id[$index]);
+
+                $productName = $inventory->product->product_name;
+                $uomName = $inventory->uom->uom_name;
+                $sub_total_price = $quantity * $rate ;
+
+                $total_price += $sub_total_price;
+                $sub_total_price = number_format((float)$sub_total_price, 2, '.', '');
+
+                $mail_html.= '<tr class="td_class">
+                                <td class="td_class">
+                                  ' . $productName . '
+                                </td>
+                                <td class="td_class" style="text-align: center;">
+                                  ' . NumberFormatterHelper::formatQty($quantity,session('user_currency')['symbol'] ?? '₹') . '
+                                </td>
+                                <td class="td_class" style="text-align: center;">
+                                  '. $uomName .'
+                                </td>
+                                <td class="td_class" style="text-align: center;">
+                                ' . $currency_symbol .' '. NumberFormatterHelper::formatQty($sub_total_price,session('user_currency')['symbol'] ?? '₹')/*IND_money_format($sub_total_price)*/ . '
+                                </td>
+                            </tr>';
+            }
+            // $po_total_amout = number_format((float)$total_price, 2, '.', '');
+            $mail_html.='<tr>
+                            <td colspan="3" class="td_class">Total</td>
+                            <td class="td_class" style="text-align: center;">
+                            ' . $currency_symbol .' '.  NumberFormatterHelper::formatQty($sub_total_price,session('user_currency')['symbol'] ?? '₹') /*IND_money_format($po_total_amout)*/ . '
+                            </td>
+                        </tr>';
+        }
+        return $mail_html;
+    }
+    //-------------- --------------MANUAL PO REPORT---------- ---------------------
+    public function listdata(Request $request)
+    {
+        if (!$request->ajax()) return;
+
+        $query = $this->getFilteredQuery($request);
+        $perPage = $request->length ?? 25;
+        $page = intval(($request->start ?? 0) / $perPage) + 1;
+        $paginated = $query->Paginate($perPage, ['*'], 'page', $page);
+        $inventories = $paginated->items();
+        $data = [];
+        foreach ($inventories as $row) {
+            $filteredProducts = $row->products;
+
+            if ($request->search_product_name) {
+                $filteredProducts = $filteredProducts->filter(function ($product) use ($request) {
+                    return stripos($product->product->product_name ?? '', $request->search_product_name) !== false;
+                });
+            }
+            $currency_symbol = $row->currencyDetails?->currency_symbol ?? (session('user_currency')['symbol'] ?? '₹');
+            $totalAmount = $filteredProducts->sum('product_total_amount');
+            $data[] = [
+                'manual_po_number' => '<a href="' . route('buyer.report.manualPO.orderDetails', $row->id) . '">' . $row->manual_po_number . '</a>',
+                'order_date' => $row->created_at ? Carbon::parse($row->created_at)->format('d/m/Y') : '',
+                'product_names' => TruncateWithTooltipHelper::wrapText($this->formatProductName($row, $request->search_product_name, $request->search_category_id)),
+                'vendor_name' => optional($row->vendor)->legal_name ?? '',
+                'prepared_by' => optional($row->preparedBy)->name ?? '',
+                'total_amount' => NumberFormatterHelper::formatCurrency($totalAmount,$currency_symbol),
+                'status' =>$row->order_status == 1 ? 'Confirmed' : 'Cancelled',
+            ];
+        }
+
+        return response()->json([
+            'draw' => intval($request->draw),
+            'recordsTotal' => $paginated->total(),
+            'recordsFiltered' => $paginated->total(),
+            'data' => $data,
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+        ]);
+    }
+
+    public function export(Request $request)
+    {
+        ini_set('memory_limit', '2048M');
+        set_time_limit(3000);
+        $filters = $request->only([
+                'branch_id',
+                'search_product_name',
+                'search_category_id',
+                'search_vendor_name',
+                'search_order_no',
+                'order_status',
+                'from_date',
+                'to_date',
+            ]);
+
+        $export = new ManualPoReportExport($filters,session('user_currency')['symbol'] ?? '₹');
+        $fileName = 'Manual_PO_Report_' . now()->format('d-m-Y') . '.xlsx';
+
+        $response = $this->exportService->storeAndDownload($export, $fileName);
+
+        return response()->json($response);
+    }
+    public function exportTotal(Request $request)
+    {
+        $query = $this->getFilteredQuery($request);
+        $total = $query->count();
+        return response()->json(['total' => $total]);
+    }
+    public function exportBatch(Request $request)
+    {
+        $offset = intval($request->input('start'));
+        $limit = intval($request->input('limit'));
+
+        $query = $this->getFilteredQuery($request);
+
+        $results = $query->offset($offset)->limit($limit)->get();
+        $result = [];
+        $totalAmount = 0;
+        foreach ($results as $index => $row) {
+            $product = $row->products->first();
+            $currency_symbol = $row->currencyDetails?->currency_symbol ?? (session('user_currency')['symbol'] ?? '₹');
+            $totalAmount+= $row->products->sum('product_total_amount');
+            $result[] = [
+                    $index + 1 + $offset,
+                    optional($product->inventory->branch)->name ?? '',
+                    $row->manual_po_number,
+                    // optional($row->created_at)->format('d/m/Y'),
+                    $row->created_at ? Carbon::parse($row->created_at)->format('d/m/Y') : '',
+                    $this->formatProductName($row, $this->filters['search_product_name'] ?? '', $this->filters['search_category_id'] ?? ''),
+                    optional($row->vendor)->legal_name ?? '',
+                    optional($row->preparedBy)->name ?? '',
+                    NumberFormatterHelper::formatCurrency($row->products->sum('product_total_amount'), $currency_symbol),
+                    $row->order_status == 1 ? 'Confirmed' : 'Cancelled',
+                ];
+        }
+        $result[] = ['','','','','','','','',''];
+        $result[] = ['','','','','','','Total Amount('.$currency_symbol.'):',
+            NumberFormatterHelper::formatCurrency($totalAmount, $currency_symbol),
+            '',
+        ];
+        return response()->json(['data' => $result]);
+    }
+
+    public function getFilteredQuery(Request $request)
+    {
+        if (session('branch_id') != $request->branch_id) {
+                session(['branch_id' => $request->branch_id]);
+            }
+
+        $query = ManualOrder::with(['vendor', 'preparedBy', 'products.product','products.inventory.branch']);
+
+        $query->when($request->buyer_id == Auth::user()->parent_id ?? Auth::user()->id, fn($q) => $q->where('buyer_id', Auth::user()->parent_id ?? Auth::user()->id))
+        ->when($request->filled(['from_date', 'to_date']), function ($q) use ($request) {
+            $from = Carbon::createFromFormat('d/m/Y', $request->from_date)->startOfDay();
+            $to   = Carbon::createFromFormat('d/m/Y', $request->to_date)->endOfDay();
+
+            $q->whereBetween('created_at', [$from, $to]);
+        })
+            ->when($request->search_product_name, fn($q, $val) =>
+                $q->whereHas('products.product', fn($p) => $p->where('product_name', 'like', "%$val%"))
+            )
+            ->when($request->search_order_no, fn($q, $val) => $q->where('manual_po_number', 'like', "%$val%"))
+            ->when($request->search_vendor_name, fn($q, $val) =>
+                $q->whereHas('vendor', fn($v) => $v->where('legal_name', 'like', "%$val%"))
+            )
+            ->when($request->search_category_id, function ($q, $val) {
+                $cat_ids = InventoryController::getIdsByCategoryName($val);
+
+                if (!empty($cat_ids)) {
+                    $q->whereHas('products.product', function ($q2) use ($cat_ids) {
+                        $q2->whereIn('category_id', $cat_ids);
+                    });
+                }
+            })
+
+            ->when($request->order_status, fn($q, $val) => $q->where('order_status', $val))
+            ->when($request->branch_id, fn($q, $val) =>
+            $q->whereHas('products.inventory.branch', fn($b) => $b->where('branch_id', $val)))
+            ->orderBy('id', 'desc')->orderBy('created_at', 'desc');
+
+        return $query;
+    }
+
+
+    public function formatProductName($order, $searchProductName = null, $searchCategoryName = null)
+    {
+        $productNames = $order->products
+            ->filter(function ($product) use ($searchProductName, $searchCategoryName) {
+                $matchesName = true;
+                $matchesCategory = true;
+
+                if ($searchProductName) {
+                    $matchesName = stripos($product->product->product_name ?? '', $searchProductName) !== false;
+                }
+
+                if ($searchCategoryName) {
+                    $searchCategoryId=InventoryController::getIdsByCategoryName($searchCategoryName);
+                    $matchesCategory = in_array($product->product->category_id ?? null, $searchCategoryId);
+                }
+
+                return $matchesName && $matchesCategory;
+            })
+            ->pluck('product.product_name')
+            ->filter()
+            ->unique()
+            ->sort()
+            ->implode(', ');
+        return e($productNames);
+    }
+
+    public function orderDetails(Request $request)//pingki
+    {
+        session(['page_title' => 'Order Details - Raprocure']);
+        $order = ManualOrder::with('products','vendor')->find($request->id);
+
+        if (!$order) {
+            abort(404, 'Manual PO not found.');
+        }
+        $buyerId = Auth::user()->parent_id ?? Auth::user()->id;
+        $buyerUserId = Auth::user()->id;
+        $hasBranchAccess = true;
+        if($buyerId != $buyerUserId){
+            $user_branch_id_only = getBuyerUserBranchIdOnly();
+            $order_inventory_branch_ids = $order->products->pluck('inventory.branch.branch_id')->unique()->toArray();
+            $hasBranchAccess = empty(array_diff($order_inventory_branch_ids, $user_branch_id_only));
+        }
+
+        if((($order->buyer_id != $buyerId) || ($order->buyer_user_id != $buyerUserId)) && (!$hasBranchAccess)){
+            abort(403, 'Unauthorized access to this Manual PO.');
+        }
+
+        $other_terms = DB::table('other_terms_conditions')->where('po_number', $order->manual_po_number)->first();
+        $order->order_other_terms = $other_terms->other_terms ?? '';
+
+        return view('buyer.inventory.manualPoDetails', compact('order'));
+    }
+    //-------------- ------------Manual PO Cancel order ----- --------
+    public function cancelManualOrder(Request $request)
+    {
+        $orderId = $request->input('order_id');
+
+        if (!$orderId) {
+            return response()->json([
+                'status' => 3,
+                'message' => 'No Record Found'
+            ]);
+        }
+
+        $buyerId = Auth::user()->parent_id ?? Auth::id();
+
+        $poOrder = ManualOrder::select('id', 'manual_po_number', 'vendor_id')
+            ->where('id', $orderId)
+            ->where('buyer_id', $buyerId)
+            ->where('order_status', 1)
+            ->first();
+
+        if (!$poOrder) {
+            return response()->json([
+                'status' => 3,
+                'message' => 'No Record Found'
+            ]);
+        }
+
+        $grnExists = GRN::where('po_number', $poOrder->manual_po_number)
+            ->where('order_id', $poOrder->id)
+            ->where('grn_type', 4)
+            ->where('is_deleted', '!=', 1)
+            ->exists();
+
+        if ($grnExists) {
+            return response()->json([
+                'status' => 2,
+                'message' => 'GRN Already Processed, Cannot delete the order!'
+            ]);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            ManualOrder::where('id', $poOrder->id)
+                ->update([
+                    'order_status' => 2,
+                    'updated_at' => now()
+                ]);
+
+             //start notification
+            $notification_data = array();
+            $notification_data['po_number'] = $poOrder->manual_po_number;
+            $notification_data['message_type'] = 'Order Cancelled';
+            $notification_data['notification_link'] = route('vendor.direct_order.show', $poOrder->id);
+            $notification_data['to_user_id'] = $poOrder->vendor_id;
+            sendNotifications($notification_data);
+            //end notification
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 1,
+                'message' => 'Order Cancelled'
+            ]);
+        } catch (Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 2,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+
+
+    //---------------------------------Download Manual Order----------------------------------
+    public function download($id)
+    {
+        $order = ManualOrder::findOrFail($id);
+        $order->load([
+            'products.inventory.branch','vendor','vendorUser.vendor',
+            'products.vendorProducts' => function ($query) use ($order) {
+                $query->where('vendor_id', $order->vendor_id);
+            }
+        ]);
+        $other_terms = DB::table('other_terms_conditions')->where('po_number', $order->manual_po_number)->first();
+        $order->order_other_terms = $other_terms->other_terms ?? '';
+
+        // return view('buyer.inventory.downloadManualPO', compact('order'));
+        $pdf = Pdf::loadView('buyer.inventory.downloadManualPO', compact('order'))
+          ->setPaper('A4', 'portrait');
+
+        // return $pdf->download("Manual_Order.pdf");
+        return response()->streamDownload(function () use ($pdf) {
+            echo $pdf->output();
+        }, "Manual_Order.pdf", [
+            'Content-Type' => 'application/pdf',
+        ]);
+    }
+
+}

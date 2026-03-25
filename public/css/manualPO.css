@@ -1,0 +1,132 @@
+
+.manualPOdropdown-menu {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 0;
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+    z-index: 999;
+    text-align: left;
+}
+
+.manualPOdropdown-item {
+    display: block;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    color: #212529;
+    font-size: 0.95rem;
+}
+
+.manualPOdropdown-item:hover {
+    color: #220ac3;
+}
+.manualPOdropdown-item.manualPOdropdown-item-border {
+    border-bottom: 1px solid var(--border-color);
+    text-transform: uppercase;
+    font-size: 13px;
+    padding: 0.25rem 0.75rem;
+}
+.manualPOdropdown-item.manualPOdropdown-item-border:last-child {
+    border: none;
+}
+
+/* Input fields */
+.qty-input,
+.rate-input ,.mrp-input, .disc-input {
+    text-align: right;
+}
+
+/* Totals */
+.total-amount {
+    text-align: right;
+    font-weight: 500;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .manualPOdropdown-menu {
+        font-size: 0.9rem;
+    }
+
+    .qty-input,
+    .rate-input,
+    .gst-select {
+        min-width: auto;
+        font-size: 0.85rem;
+    }
+
+    .manualPOdropdown-item {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.6rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .qty-input,
+    .rate-input,
+    .gst-select {
+        font-size: 0.8rem;
+        padding: 0.3rem;
+    }
+
+    .manualPOdropdown-menu {
+        font-size: 0.85rem;
+    }
+
+    .manualPOdropdown-item {
+        padding: 0.35rem 0.5rem;
+    }
+}
+#grand-total {
+    font-weight: bold;
+}
+
+/* Ensure borders are visible for the specific table */
+#forManualPoInventoryDetailsTable.table-bordered th,
+#forManualPoInventoryDetailsTable.table-bordered td {
+    border: 1px solid #dee2e6 !important;  /* Ensure border visibility */
+}
+
+/* Optional: Adding some padding for better readability */
+#forManualPoInventoryDetailsTable th,
+#forManualPoInventoryDetailsTable td {
+    padding: 1rem;
+}
+
+/* Optional: Adding margin to the bottom of the table */
+#forManualPoInventoryDetailsTable {
+    margin-bottom: 1.5rem; /* You can adjust this to your preferred margin */
+}
+
+.form-floating {
+    position: relative;
+}
+
+.form-floating input, .form-floating textarea {
+    padding-left: 2.5rem;  /* Adjust padding to make space for the icon */
+}
+
+.form-floating i {
+    position: absolute;
+    top: 50%;
+    left: 0.75rem; /* Adjust the left position to align the icon */
+    transform: translateY(-50%);
+    z-index: 1;  /* Ensure the icon is above the input text but below the label */
+}
+
+.form-floating textarea {
+    padding-left: 2.5rem; /* Adjust padding for the icon inside the textarea */
+}
+
+.form-floating textarea + label {
+    padding-left: 0.75rem; /* Adjust label position if needed */
+}
+.locked-select {
+    pointer-events: none;
+    background-color: #d6d7d7!important;
+}

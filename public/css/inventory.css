@@ -1,0 +1,56 @@
+.hidden-div {
+  display: none;
+  width: 250px;
+  max-height: 250px;
+  background: #f8f9fa;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  text-align: center;
+  overflow-y: auto;
+  z-index: 9999;
+  position: absolute;
+  left: 0;
+  top: 40px;
+  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  padding: 10px;
+}
+
+.hidden-div ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.hidden-div ul li {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 5px;
+}
+
+.hidden-div ul li a,
+.hidden-div ul li button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  border-radius: 5px;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  background: none;
+}
+
+.hidden-div ul li button:hover,
+.hidden-div ul li a:hover {
+  background: #e9ecef;
+}
+
+.btn-other-link-white:hover {
+  background-color: #005494 !important;
+  color: #fff;
+}
+.col-md-6 a.btn {
+  font-weight: 300 !important;
+}
+
+

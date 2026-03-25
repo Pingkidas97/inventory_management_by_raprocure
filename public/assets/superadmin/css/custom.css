@@ -1,0 +1,239 @@
+.pagination .page-link {
+    border-radius: 8px;
+    margin: 0 3px;
+    font-size: 16px;
+    background: #efefef !important;
+    color: #000 !important;
+}
+
+.pagination .active .page-link {
+    background: #015294 !important;
+    color: #fff !important;
+}
+
+.bootstrap-tagsinput {
+    width: 100%;
+    min-height: 38px;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+}
+.bootstrap-tagsinput .tag {
+    margin-right: 2px;
+    color: white;
+    background-color: #0d6efd;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+.capital {
+    text-transform: uppercase;
+}
+.ck-editor__editable {
+    min-height: 200px;
+}
+.text-warning {
+    color: #ffc107 !important;
+}
+
+ul {
+    list-style: outside none none;
+    margin: 0;
+    padding: 0;
+}
+
+.char-count {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.char-count.warning {
+    color: #ffc107;
+}
+.char-count.error {
+    color: #dc3545;
+}
+
+.product_listing_table {
+    margin-bottom: 12px;
+}
+
+.project_header .bi {
+    font-size: 24px;
+    vertical-align: middle;
+    color: #000000;
+}
+
+.notification-number {
+    vertical-align: middle;
+}
+
+.tooltip-inner {
+    border-radius: 0 !important;
+}
+
+.sidebar-bi {
+    font-size: 1.2rem;
+    margin-right: 5px;
+    color: #040000;
+}
+
+.page-start-section {
+    position: inherit;
+    top: inherit;
+    padding-top: 40px;
+}
+
+.from-start-section {
+    padding-right: 20px;
+    padding-left: 20px;
+}
+
+.btn-rfq-primary {
+    background-color: #015294 !important;
+    border-color: #015294 !important;
+    color: white !important;
+}
+
+.btn-rfq-secondary {
+    background-color: #ddfcfd !important;
+    border-color: #759dce !important;
+    color: #005494 !important;
+}
+
+.btn-rfq-secondary:hover {
+    background: #98e9eb !important;
+}
+
+.btn-rfq-danger {
+    background-color: transparent;
+    border-color: #ff6241 !important;
+    color: #ff6241 !important;
+}
+
+.btn-rfq-danger:hover {
+    background-color: #ff6241 !important;
+    color: #fff !important;
+}
+
+.btn-rfq-white {
+    background-color: #fff !important;
+    border-color: #98c0d9 !important;
+    color: #285394 !important;
+}
+
+.btn-rfq-white:hover {
+    background-color: #005494 !important;
+    color: #fff !important;
+}
+
+.btn-rfq {
+    position: relative;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 15px;
+    border-radius: 4px;
+    border: 0;
+    text-decoration: none;
+    min-width: 62px;
+    text-align: center;
+    border: 1px solid transparent;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    transition: all 0.5s;
+    white-space: nowrap;
+}
+
+.fillter-form-control {
+    background: #fff;
+    border: 1px solid #b8b8b8;
+    color: #6e6e6e;
+    height: 50px;
+    padding: 10px 20px;
+    border-radius: 0.35rem;
+}
+
+.fillter-form-select {
+    background: #fff;
+    border: 1px solid #b8b8b8;
+    color: #6e6e6e;
+    height: 50px;
+    padding: 10px 20px;
+    border-radius: 0.35rem;
+}
+
+.fillter-form-control:hover,
+.fillter-form-control:focus {
+    box-shadow: none;
+}
+
+.form-control:hover,
+.form-control:focus {
+    box-shadow: none;
+}
+
+.form-select:hover,
+.form-select:focus {
+    box-shadow: none;
+}
+
+
+.capital {
+    text-transform: uppercase;
+}
+
+.ck-editor__editable {
+    min-height: 200px;
+}
+
+.text-warning {
+    color: #ffc107 !important;
+}
+
+.error-class {
+    color: #ff0000 !important;
+}
+
+ul {
+    list-style: outside none none;
+    margin: 0;
+    padding: 0;
+}
+
+.note-taxt {
+    background: #eae2e2;
+    border-radius: 5px;
+    font-size: 15px;
+    padding: 15px;
+}
+
+.note-taxt p {
+    margin-bottom: 1rem;
+}
+
+.cat-prod-name,
+.product-name-heading {
+    cursor: pointer;
+}
+
+select.form-control {
+    line-height: unset !important;
+}
+
+tbody,
+td,
+tfoot,
+th,
+thead,
+tr {
+    vertical-align: middle !important;
+}
+
+.table-striped>tbody>tr:nth-of-type(odd)>* {
+    --bs-table-bg-type: #fff4ef !important;
+}
+
+.profile-type-title {
+    font-weight: 700;
+    color: #ff4e4e !important;
+    font-size: 25px !important;
+}

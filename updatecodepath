@@ -1,0 +1,82 @@
+Pingki Code Update
+view
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\inventory\modal.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\bulkinventory\bulk_inventory.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\stockLedger.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\currentStock.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\inventory\index.blade.php
+    ;[search by "serach_inventory_type_id" replace by "search_inventory_type_id"]
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\issued.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\issue\modal.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\issueReturn\modal.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\stockReturn\modal.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\stockreturn.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\productWiseStockLedger.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\pendingGrn.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\manualpo.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\issuereturn.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\indent.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\grn.blade.php
+; F:\xampp8.2\htdocs\raprocure11\resources\views\buyer\report\closeindent.blade.php
+--------------------------------------------------------------------------------------------------------------------------------
+route page:
+; raprocure11\routes\buyer.php
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+
+model
+
+
+--------------------------------------------------------------------------------------------------------------------------------
+; F:\xampp8.2\htdocs\raprocure11\config\app.php
+; F:\xampp8.2\htdocs\raprocure11\config\filesystems.php
+; F:\xampp8.2\htdocs\raprocure11\.env
+; F:\xampp8.2\htdocs\raprocure11\app\Helpers\NumberFormatterHelper.php
+--------------------------------------------------------------------------------------------------------------------------------
+
+controller
+
+; F:\xampp8.2\htdocs\raprocure11\app\Http\Controllers\Buyer\BulkInventoryController.php
+; F:\xampp8.2\htdocs\raprocure11\app\Http\Controllers\Buyer\InventoryController.php
+    ;[search by "serach_inventory_type_id" replace by "search_inventory_type_id"]
+; F:\xampp8.2\htdocs\raprocure11\app\Http\Controllers\Buyer\IssuedController.php
+; F:\xampp8.2\htdocs\raprocure11\app\Http\Controllers\Buyer\StockReturnController.php
+; F:\xampp8.2\htdocs\raprocure11\app\Http\Controllers\Buyer\IndentController.php
+-------------------------------------------------------------------------------------------------------------------------------
+new folder
+
+; app/Exports
+
+-------------------------------------------------------------------------------------------------------------------------------
+new file
+; F:\xampp8.2\htdocs\raprocure11\app\Helpers\StockQuantityHelper.php
+; F:\xampp8.2\htdocs\raprocure11\app\Helpers\CurrentStockReportAmountHelper.php
+; F:\xampp8.2\htdocs\raprocure11\app\Services\ExportService.php
+; F:\xampp8.2\htdocs\raprocure11\public\js\inventoryFileExport.js
+-------------------------------------------------------------------------------------------------------------------------------
+js
+; F:\xampp8.2\htdocs\raprocure11\public\js\bulkinventory.js
+; F:\xampp8.2\htdocs\raprocure11\public\js\indent.js
+    ;[search by "serach_inventory_type_id" replace by "search_inventory_type_id"]
+; F:\xampp8.2\htdocs\raprocure11\public\js\addIssue.js
+; F:\xampp8.2\htdocs\raprocure11\public\js\indent.js
+; F:\xampp8.2\htdocs\raprocure11\public\js\closeindent.js
+
+------------------------------------------------------------------------------------------------------------------------------
+css
+; F:\xampp8.2\htdocs\raprocure11\public\css\suggestions.css
+
+------------------------------------------------------------------------------------------------------------------------------
+
+
+
+✅
+
+
+
+Hello, world! @#$%^&*()_+[]{}|;':",./<>?`~—✓©®™•¡¿§¤€£¥₩₹†‡‰¶∆∑∞µΩ≈≠≤≥÷±√°¢¡¬‽№☯☮☢☣♻⚡⚠✔️🔒🎉😊💡🌍🚀📦🧩🛠️🐍🔥💾📁🖥️⌨️🔧🔍
+
+
+
+headers: {'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')},

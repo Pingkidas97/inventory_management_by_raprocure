@@ -1,0 +1,274 @@
+* {
+    font-size: 14px;
+    line-height: 20px;
+}
+
+html {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+body {
+    color: #535353 !important;
+    font-family: 'DM Sans';
+}
+
+
+/* Links */
+a {
+    text-decoration: none !important;
+    -webkit-transition: all 0.2s;
+    transition: all 0.2s;
+    display: inline-block;
+}
+
+a:focus,
+a:hover {
+    text-decoration: none;
+    outline: none;
+}
+
+/* Clearfix */
+.clear,
+.clearfix {
+    clear: both !important;
+}
+
+/* Buttons */
+button:focus,
+button:hover {
+    text-decoration: none !important;
+    outline: none !important;
+    color: inherit;
+}
+
+/* Form Elements */
+input:focus,
+input:hover {
+    text-decoration: none;
+    outline: none;
+}
+
+.form-control:focus {
+    box-shadow: none !important;
+    border: 1px solid #86b7fe !important;
+}
+
+.form-select:focus {
+    border: 1px solid #86b7fe !important;
+}
+
+select,
+select:focus,
+select:hover {
+    text-decoration: none;
+    outline: none;
+}
+
+/* Placeholders */
+:placeholder {
+    color: #d3d3d3;
+    opacity: 1;
+}
+
+:-ms-input-placeholder {
+    color: #d3d3d3;
+}
+
+::-ms-input-placeholder {
+    color: #d3d3d3;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6, p, ul {
+    margin: 0;
+    padding: 0;
+}
+
+ul li {
+    list-style: none;
+}
+
+/* Login Styles */
+.login-12 .form-section {
+    max-width: 430px;
+    margin: 0 auto;
+    text-align: center;
+    width: 100%;
+}
+
+.login-12 .form-section h3 {
+    font-size: 23px;
+    margin-bottom: 40px;
+    color: #040404;
+    font-weight: 500;
+}
+
+.login-12 .login-inner-form {
+    color: #cccccc;
+    position: relative;
+    width: 100%;
+}
+
+.login-12 .login-inner-form .form-box {
+    float: left;
+    width: 100%;
+    position: relative;
+    margin-bottom: 25px;
+}
+
+.login-12 .login-inner-form .form-box .form-control {
+    float: left;
+    width: 100%;
+    padding: 12px 45px 12px 20px;
+    border-radius: 0px !important;
+    font-size: 16px;
+    color: #535353;
+    font-weight: 500;
+    border: 1px solid #dcdcdc;
+    background: #fff;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+}
+
+.login-12 .login-inner-form .form-box i,
+.login-12 .login-inner-form .form-box svg {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 18px;
+    color: #535353;
+}
+
+.login-12 .login-inner-form .checkbox {
+    margin-bottom: 25px;
+    font-size: 14px;
+}
+
+.login-12 .login-inner-form .checkbox a {
+    font-size: 16px;
+    color: #535353;
+}
+
+.login-12 .login-inner-form .form-group {
+    margin-bottom: 25px;
+}
+
+.login-12 .btn-rfq-primary {
+    background: #015294;
+}
+
+.login-12 .btn-lg {
+    padding: 0 50px;
+    line-height: 50px;
+}
+
+.login-12 .btn-theme {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    -webkit-appearance: none;
+    outline: none;
+    color: #fff;
+    transition: all 0.3s linear;
+    z-index: 1;
+    overflow: hidden;
+    cursor: pointer;
+    width: 100%;
+    text-transform: uppercase;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: 'Jost', sans-serif;
+    border-radius: 50px;
+    border: none;
+}
+
+/* Image Styles */
+.rgtBigImg {
+    padding: 0px !important;
+}
+
+.rgtBigImg img {
+    background-size: cover;
+    width: 100% !important;
+    opacity: 0.9;
+    height: 100%;
+}
+
+.comp_logo_img {
+    width: 200px;
+}
+
+.login-12 .form-info {
+    min-height: 100vh;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 30px 15px;
+}
+
+.login-12 .logo img {
+    height: 100%;
+    margin-bottom: 15px;
+}
+
+/* Captcha Styles */
+.captcha-refresh-btn {
+    font-size: 18px;
+    color: white;
+    height: 39px;
+    width: 39px;
+}
+
+.captcha-refresh-btn svg {
+    font-size: 18px;
+    color: #fff;
+}
+
+.captcha-img {
+    display: flex;
+    gap: 10px;
+}
+
+.captcha-img img {
+    width: 200px;
+    height: 40px;
+}
+
+.captcha_div {
+    display: flex;
+    gap: 10px;
+}
+
+/* Responsive Styles */
+@media (max-width: 991px) {
+    .captcha_div {
+        flex-direction: column;
+    }
+    
+    .captcha-img {
+        justify-content: center;
+    }
+    
+    .C_img {
+        width: 45%;
+    }
+    
+    .captcha-img img {
+        width: 100%;
+    }
+    
+    .captcha_div input {
+        padding: 12px 45px 12px 20px;
+    }
+    
+    .captcha-refresh-btn {
+        width: 16%;
+    }
+}
+
+@media (max-width: 767px) {
+    .rgtBigImg {
+        display: none;
+    }
+}

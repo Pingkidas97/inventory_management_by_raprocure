@@ -1,0 +1,318 @@
+<?php
+
+namespace App\Http\Controllers\Buyer;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Buyer\InventoryController;
+use App\Http\Controllers\Buyer\GrnController;
+use Illuminate\Http\Request;
+use App\Models\Inventories;
+use App\Models\Rfq;
+use App\Models\Grn;
+use App\Models\IndentRfq;
+use App\Models\Indent;
+use App\Models\RfqProductVariant;
+use App\Models\ForceClosure;
+use Illuminate\Support\Facades\Auth;
+use App\Helpers\NumberFormatterHelper;
+
+use DB;
+
+class ForceClosureController extends Controller
+{
+
+    public function fetchInventoryDetails(Request $request)
+    {
+        if (Auth::user()->parent_id != 0) {
+                $this->ensurePermission('FORCE_CLOSURE', 'add', '1');
+        }
+        $inventory = Inventories::with('product')->find($request->inventory_id);
+
+        if (!$inventory) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Inventory not found.'
+            ]);
+        }
+
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+
+        // Fetch only required RFQ data
+        $rfqs = Rfq::where('record_type', 2)
+            ->whereIn('buyer_rfq_status', [1,5, 9, 10])
+            ->whereHas('rfqProductVariants', function ($q) use ($request) {
+                $q->where('inventory_id', $request->inventory_id)
+                ->where('inventory_status', 1);
+            })
+            ->with(['rfqProductVariants' => function($q) use ($request) {
+                $q->where('inventory_id', $request->inventory_id)
+                ->where('inventory_status', 1)
+                ->with(['orderVariantsActiveOrder:id,po_number,order_quantity,rfq_product_variant_id']);
+            }])
+            ->get();
+
+        if ($rfqs->isEmpty()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No active RFQ exists for this inventory.'
+            ]);
+        }
+
+        // Collect all po_numbers for GRN query
+        $orderPoNumbers = $rfqs->flatMap(function ($rfq) {
+            return $rfq->rfqProductVariants->flatMap(function ($variant) {
+                return $variant->orderVariantsActiveOrder->pluck('po_number');
+            });
+        })->unique()->values();
+
+        // Fetch GRN data
+        $grnData = Grn::where('inventory_id', $request->inventory_id)
+            ->where('company_id', $buyerId)
+            ->whereIn('po_number', $orderPoNumbers)
+            ->selectRaw('po_number, SUM(grn_qty) as total_grn')
+            ->groupBy('po_number')
+            ->pluck('total_grn', 'po_number');
+
+        $filteredRfqs = [];
+
+        foreach ($rfqs as $rfq) {
+
+            $variant = $rfq->rfqProductVariants->first();
+            if (!$variant) continue;
+
+            $rfqQty = (float)$variant->quantity;
+            $totalOrder = 0;
+            $totalGrn = 0;
+            $details = [];
+            $valid = true;                               
+            foreach ($variant->orderVariantsActiveOrder as $order) {
+                $orderQty = (float)$order->order_quantity;
+                $grnQty = (float)($grnData[$order->po_number] ?? 0);
+                
+                $totalOrder += $orderQty;
+                $totalGrn += $grnQty;
+                // Any order's GRN < order_qty → skip RFQ
+                if ($grnQty < $orderQty) {
+                    $valid = false;
+                    break;
+                }
+
+
+                $details[] = [
+                    'order_number' => $order->po_number,
+                    'order_quantity' => NumberFormatterHelper::formatQty($orderQty,session('user_currency')['symbol'] ?? '₹'),
+                    'grn_qty' => NumberFormatterHelper::formatQty($grnQty,session('user_currency')['symbol'] ?? '₹'),
+                ];
+            } 
+
+            // Only include RFQs where total order < RFQ quantity and all orders valid
+            if ($valid && $totalOrder < $rfqQty && $totalOrder>0 && $totalGrn>0) {
+                $maxRange = $totalOrder * 1.02;
+                $forceClosure = $totalGrn >= $totalOrder && $totalGrn <= $maxRange;
+
+                $filteredRfqs[] = [
+                    'rfq_id' => $rfq->id,
+                    'rfq_number' => $rfq->rfq_id,
+                    'rfqQty' => NumberFormatterHelper::formatQty($rfqQty,session('user_currency')['symbol'] ?? '₹'),
+                    'totalOrderQty' => NumberFormatterHelper::formatQty($totalOrder,session('user_currency')['symbol'] ?? '₹'),
+                    'totalGrnQty' => NumberFormatterHelper::formatQty($totalGrn,session('user_currency')['symbol'] ?? '₹'),
+                    'force_closure_status' => $forceClosure ? 1 : 0,
+                    'details' => $details
+                ];
+            }
+        }
+
+        if (empty($filteredRfqs)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No RFQ matches the GRN condition for force closure.'
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'inventory' => [
+                'item_code' => $inventory->item_code ?? '',
+                'product_name' => $inventory->product->product_name ?? '',
+                'specification' => $inventory->specification ?? '',
+                'size' => $inventory->size ?? ''
+            ],
+            'rfqs' => array_values($filteredRfqs)
+        ]);
+    }  
+
+
+
+    public function store(Request $request)
+    {
+        if (Auth::user()->parent_id != 0) {
+                $this->ensurePermission('FORCE_CLOSURE', 'add', '1');
+        }
+        $request->validate([
+            'rfq_id' => 'required|exists:rfqs,id',
+            'rfq_number' => 'required|exists:rfqs,rfq_id',
+            'inventory_id' => 'required|exists:inventories,id',
+            'rfq_qty' => 'required|numeric',
+            'total_order_qty' => 'required|numeric',
+            'total_grn_qty' => 'required|numeric',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+
+            $buyerId = auth()->id();
+            $buyerParentId = auth()->user()->parent_id != 0
+                ? auth()->user()->parent_id
+                : $buyerId;
+
+            $variant = RfqProductVariant::where('rfq_id', $request->rfq_number)
+                ->where('inventory_id', $request->inventory_id)
+                ->where('inventory_status', 1)
+                ->first();
+
+            if (!$variant) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'RFQ Variant not found'
+                ], 404);
+            }
+            $inventory = Inventories::find($request->inventory_id);
+            if (!$inventory) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Inventory not found'
+                ], 404);
+            }
+           $unApproveOrder=Order::with(['order_variants' => function ($q) use ($request, $variant) {
+                        $q->where('rfq_id', $request->rfq_number)
+                        ->where('rfq_product_variant_id', $variant->id);
+                    }])
+                    ->where('rfq_id', $request->rfq_number)
+                    ->where('order_status', 3)
+                    ->exists();
+
+            if ($unApproveOrder) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Unapproved order exists. Please cancel or confirm the order before proceeding with force closure.'
+                ], 400);
+            }
+
+            $rfqQty = (float)$variant->quantity;
+            $totalOrder = 0;
+            $totalGrn = 0;
+            $details = [];
+            $valid = true;                               
+            foreach ($variant->orderVariantsActiveOrder as $order) {
+                $orderQty = (float)$order->order_quantity;
+                $grnQty = (float)($grnData[$order->po_number] ?? 0);
+                
+                $totalOrder += $orderQty;
+                $totalGrn += $grnQty;
+                // Any order's GRN < order_qty → skip RFQ
+                if ($grnQty < $orderQty) {
+                    $valid = false;
+                    break;
+                }
+
+
+                $details[] = [
+                    'order_number' => $order->po_number,
+                    'order_quantity' => NumberFormatterHelper::formatQty($orderQty,session('user_currency')['symbol'] ?? '₹'),
+                    'grn_qty' => NumberFormatterHelper::formatQty($grnQty,session('user_currency')['symbol'] ?? '₹'),
+                ];
+            } 
+
+            if ($valid && $totalOrder < $rfqQty && $totalOrder>0 && $totalGrn>0) {
+                $maxRange = $totalOrder * 1.02;
+                $forceClosure = $totalGrn >= $totalOrder && $totalGrn <= $maxRange;
+                if($forceClosure){
+                    ForceClosure::create([
+                        'inventory_id' => $request->inventory_id,
+                        'rfq_id' => $request->rfq_id,
+                        'rfq_number' => $variant->rfq_id,
+                        'rfq_product_variant_id' => $variant->id,
+                        'original_rfq_quantity' => $rfqQty,
+                        'updated_rfq_quantity' => $totalOrder,
+                        'total_order_quantity' => $totalOrder,
+                        'total_grn_quantity' => $totalGrn,
+                        'buyer_parent_id' => $buyerParentId,
+                        'buyer_id' => $buyerId,
+                    ]);
+                
+
+                    // update quantity without mass assignment
+                    $variant->quantity = $request->total_order_qty;
+                    $variant->save();
+
+                    // call inventory mapping
+                    $inventoryController = new InventoryController();
+                    $inventoryController->handleIndentRfqMapping(
+                        $variant->product_id,
+                        $variant->rfq_id,
+                        $inventory
+                    );
+
+                    //updateIndent
+                    $this->updateIndent($inventory,$variant->rfq_idy);
+
+                    // close indent
+                    $grnController = new GrnController();
+                    $grnController->closeIndent($request->inventory_id);
+
+                    DB::commit();
+
+                    return response()->json([
+                        'status' => 'success',
+                        'message' => 'Force closure completed successfully.'
+                    ]);
+                }
+            }
+
+        } catch (\Throwable $e) {
+
+            DB::rollBack();
+
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateIndent($inventory, $rfqId)
+    {
+        $indentIDsByRfqInventory = IndentRfq::where('rfq_id', $rfqId)
+            ->where('inventory_id', $inventory->id)
+            ->pluck('indent_id')
+            ->unique()
+            ->toArray();
+
+        $indentUsage = IndentRfq::whereIn('indent_id', $indentIDsByRfqInventory)
+            ->where('inventory_id', $inventory->id)
+            ->selectRaw('indent_id, SUM(used_indent_qty) as total_used_qty')
+            ->groupBy(['indent_id', 'inventory_id'])
+            ->get();
+        $indents = Indent::whereIn('id', $indentIDsByRfqInventory)
+                ->where('inventory_id', $inventory->id)
+                ->get()
+                ->keyBy('id');
+
+
+        foreach ($indentUsage as $usage) {
+
+            $indent = $indents->get($usage->indent_id);
+            if (!$indent) continue;
+
+            $newQty = $indent->indent_qty - $usage->total_used_qty;
+
+            if ($newQty > 0) {
+                $indent->indent_qty = $usage->total_used_qty;
+                $indent->save();
+            } else {
+                $indent->delete();
+            }
+        }
+    }
+
+}

@@ -1,0 +1,780 @@
+$(document).ready(function () {
+    function toggleInventoryFields(fields, enabled = true, style = '') {
+        fields.forEach(function(id) {
+            const $el = $('#' + id);
+            if (!enabled) {
+                $el.prop('readonly', true)
+                .css({
+                    'background-color': '#e3f2fd', // light blue
+                    'border-color': '#2196f3',
+                    'color': '#000'
+                });
+            } else {
+                $el.prop('readonly', false)
+                .css({
+                    'background-color': '',
+                    'border-color': '',
+                    'color': ''
+                });
+            }
+            if (style) {
+                $el.attr('style', style);
+            } else {
+                $el.removeAttr('style');
+            }
+        });
+    }
+
+    const inventoryFields = [
+        'inventory_product_name', 'product_specification', 'product_size',
+        'opening_stock', 'product_uom', 'stock_price', 'product_brand',
+        'buyer_product_name', 'inventory_grouping', 'inventory_type',
+        'indent_min_qty','cost_center'
+    ];
+
+    $('#addInventoryBtn').click(function (e) {
+        e.preventDefault();
+        checkPermissionAndExecute('INVENTORY_MANAGEMENT', 'add', '1', function () {
+            $('#inventoryModalLabel').html('<i class="bi bi-pencil"></i> Add Inventory');
+            $('#inventoryForm')[0].reset();
+            $('#inventoryForm').find('input[type="hidden"], select').val('');
+            $('#divisionCategory').html('');
+            $('#inventoryModal').modal('show');
+            $('.item_code').hide();
+
+            toggleInventoryFields(inventoryFields, true);
+
+            if ($('.edit_inventory_button_section .inventory_non_edit_button').length === 0) {
+                $('.edit_inventory_button_section').html(`
+                    <button type="submit" class="ra-btn btn-primary ra-btn-primary text-uppercase text-nowrap font-size-11 save_inventory_button">
+                        <i class="bi bi-save font-size-11" aria-hidden="true"></i>Save Inventory
+                    </button>
+                `);
+            }
+        });
+    });
+
+    $('#editInventoryBtn').click(function (e) {
+        e.preventDefault();
+        checkPermissionAndExecute('INVENTORY_MANAGEMENT', 'edit', '1', function () {
+
+            toggleInventoryFields(inventoryFields, true);
+
+            const checked = $("input[name='inv_checkbox[]']:checked");
+            if (checked.length === 1) {
+
+                const id = checked.val();
+                let url = editInventoryDetailsUrl.replace('__ID__', id);
+                $.get(url, function (response) {
+                    if (response.success) {
+                        let data = response.data;
+                        $('#inventoryModalLabel').html('<i class="bi bi-pencil"></i> Edit Inventory');
+                        $('.save_inventory_button').html(function (_, html) {
+                            return html.replace('Save', 'Update');
+                        });
+                        $('.edit_inventory_button_section').html(`
+                            <div class="d-flex flex-column align-items-start">
+                                <button type="submit"
+                                    class="ra-btn btn-primary ra-btn-primary text-uppercase font-size-11 save_inventory_button">
+                                    <i class="bi bi-save font-size-11"></i> Update Inventory
+                                </button>
+
+                                <div class="inventory_edit_msg mt-1"></div>
+                            </div>
+                        `);
+                        $('#inventoryId').val(data.id);
+                        $('#inventory_product_name').val(data.product.product_name);
+                        $('#product_id').val(data.product_id);
+                        $('#product_specification').val(response.specification);
+                        $('#product_size').val(response.size);
+                        $('#opening_stock').val(data.opening_stock);
+                        $('#product_uom').val(data.uom_id).trigger('change');
+                        $('#stock_price').val(data.stock_price);
+                        $('#product_brand').val(data.product_brand);
+                        $('#buyer_product_name').val(data.buyer_product_name);
+                        $('#inventory_grouping').val(data.inventory_grouping);
+                        $('#cost_center').val(data.cost_center);
+                        $('#inventory_type').val(data.inventory_type_id > 0 ? data.inventory_type_id : '').trigger('change');
+                        $('#indent_min_qty').val(data.indent_min_qty);
+                        $('#item_code').val(data.item_code);
+
+                        toggleInventoryFields(inventoryFields, false, 'background-color:#dbeff1!important;color:#000;');
+
+                        // CASE-1 → Fully locked (issued / return exists)
+                        if (response.non_edit_env == '1') {
+                            if(response.product_only_edit!='1' && response.opening_stock_editable !='1'){
+                                $('.save_inventory_button').remove();
+                                $('.edit_inventory_button_section').html(
+                                    '<span class="btn-rfq btn-rfq-danger text-danger ">Inventory has issued QTY, so you can’t edit this inventory</span>'
+                                );
+                            }
+                             if(response.opening_stock_editable !='1' ){
+                                $('.inventory_edit_msg').html(
+                                    '<span class="btn-rfq btn-rfq-danger text-danger col-md-12">Only product name can be edited</span>'
+                                );
+                            }
+
+                        }
+                        // CASE-2 → Fully editable
+                        if (response.edit_data == '1') {
+                            toggleInventoryFields(inventoryFields, true);
+                        }
+
+                        // CASE-3 → Non editable environment (like indent exists but no issue)
+                        if(response.non_edit_env != '1' && response.edit_data != '1'){
+                            toggleInventoryFields(inventoryFields, true);
+                        }
+
+                        // CASE-4 → Only product editable (product_id == 0)
+                        if (response.product_only_edit == '1') {
+                            toggleInventoryFields(
+                                ['inventory_product_name'],
+                                true
+                            );
+
+                        }
+
+                        // CASE-5 admin buyer opening stock editable
+                        if(response.opening_stock_editable =='1'){
+                            toggleInventoryFields(
+                                ['opening_stock'],
+                                true
+                            );
+                            $('#opening_stock').attr('min', response.used_opening_stock);
+
+                        }
+                        // CASE-6 → Partial edit restriction
+                        if (response.edit_data == '0') {
+                            if(response.product_only_edit == '1'){
+                                toggleInventoryFields(
+                                    ['inventory_product_name'],
+                                    true
+                                );
+                            }else{
+                                toggleInventoryFields(['inventory_product_name'], false, 'background-color:#dbeff1!important;color:#000;');
+                            }
+                            toggleInventoryFields(
+                                ['product_specification', 'product_size'],
+                                false,
+                                'background-color:#dbeff1!important;color:#000;'
+                            );
+                        }
+
+                        // show modal
+                        $('#inventoryModal').modal('show');
+                        $('.item_code').show();
+                    } else {
+                        toastr.error('No Inventory Found');
+                    }
+                });
+            } else {
+                toastr.error(checked.length > 1 ? 'You may select only one inventory.' : 'Select at least one inventory');
+            }
+        });
+    });
+
+    // Reset form fields when modal is hidden
+    $('#inventoryModal').on('hidden.bs.modal', function () {
+        $('#inventoryForm')[0].reset();
+        $('#divisionCategory').html('');
+        $('#inventory_product_name').val('');
+    });
+
+    //====show indent modal===
+    window.one_row_show_indent_modal = function () {
+        let checkedItems = $("input[name='inv_checkbox[]']:checked");
+
+        if (checkedItems.length === 1) {
+            let inventoryId = checkedItems.val();
+            $.ajax({
+                url: getInventoryDetailsUrl,
+                type: "POST",
+                data: {
+                    inventory_id: inventoryId,
+                    _token: $('meta[name="csrf-token"]').attr("content") // Secure CSRF token retrieval
+                },
+                success: function (response) {
+                    if (response.status === 1) {
+                        var data = response.data;
+                        $('#indent_inventory_id').val(inventoryId);
+                        $("#indent_product_name").text(data.product?.product_name || '');
+                        $("#indent_specification").next('i.bi-info-circle-fill').remove();
+                        $("#indent_size").next('i.bi-info-circle-fill').remove();
+                        $("#indent_specification").html(
+                            data.specification && data.specification.length > 10
+                                ? `
+                                    ${data.specification.substring(0, 10)}...
+                                    <i class="bi bi-info-circle-fill ms-1" data-bs-toggle="tooltip" title="${data.specification}"></i>
+                                `
+                                : data.specification ?? ''
+                            );
+
+                        $("#indent_size").html(
+                            data.size && data.size.length > 10
+                                ? `
+                                    ${data.size.substring(0, 10)}...
+                                    <i class="bi bi-info-circle-fill ms-1" data-bs-toggle="tooltip" title="${data.size}"></i>
+                                `
+                                : data.size ?? ''
+                            );
+                        $("#indent_uom").html(data.uom?.uom_name || '');
+
+                        $("#indent_remarks").text('');
+                        $("#indent_qty").text('');
+                        //==show indent modal
+                        $('#addeditindentModalLabel').html('<i class="bi bi-pencil"></i> Add Indent');
+                        $('.save_indent_button').html(function(_, html) {
+                            return html.replace('Update','Save');
+                        });
+                        $('.delete_indent_button').remove();
+                        $("#indentModal").modal("show");
+                    } else {
+                        toastr.error(response.message);
+                    }
+                },
+                error: function () {
+                    toastr.error("Something went wrong while fetching inventory details.");
+                }
+            });
+
+        } else {
+            if (checkedItems.length > 1) {
+                toastr.error('You may select only one inventory.');
+            } else {
+                toastr.error('Please select an inventory.');
+            }
+        }
+    };
+    window.show_indent_modal = function () {
+        $("#search_bulk_indent_product").hide();
+        checkPermissionAndExecute('INDENT', 'add', '1', function () {
+            let checkedItems = selectedIds;
+            $('#indent_id').val('');
+            if (checkedItems.length >= 1) {
+                let inventoryIds = [];
+
+                checkedItems.forEach(function (id) {
+                    inventoryIds.push(id);
+                });
+                $.ajax({
+                    url: getInventoryDetailsUrl,
+                    type: "POST",
+                    data: {
+                        inventory_ids: inventoryIds,
+                        _token: $('meta[name="csrf-token"]').attr("content")
+                    },
+                    traditional: false,
+                    success: function (response) {
+                        if (response.status === 1) {
+                            let inventories = Object.values(response.data);
+                            let tbodyHtml = '';
+
+                            inventories.forEach(function (item) {
+                                let specificationHtml = item.specification?.length > 10
+                                    ? `${item.specification.substring(0, 10)}...
+                                    <i class="bi bi-info-circle-fill ms-1" data-bs-toggle="tooltip" title="${item.specification.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}"></i>`
+                                    : item.specification || '';
+
+                                let sizeHtml = item.size?.length > 10
+                                    ? `${item.size.substring(0, 10)}...
+                                    <i class="bi bi-info-circle-fill ms-1" data-bs-toggle="tooltip" title="${item.size.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}"></i>`
+                                    : item.size || '';
+
+                                tbodyHtml += `
+                                    <tr>
+                                        <input type="hidden" name="inventory_id[]" value="${item.id}">
+                                        <td>${item.product?.product_name || item.buyer_product_name}</td>
+                                        <td>${specificationHtml}</td>
+                                        <td>${sizeHtml}</td>
+                                        <td>${item.uom?.uom_name || ''}</td>
+                                        <td><input type="text" class="form-control bg-white specialCharacterAllowed" name="remarks[]" maxlength="100"></td>
+                                        <td><input type="text" class="form-control bg-white smt_numeric_only_qty" name="indent_qty[]" maxlength="10"></td>
+                                    </tr>
+                                `;
+                            });
+
+                            $('#indent_tbody').html(tbodyHtml);
+
+                            // Update modal header, button, etc.
+                            $('#addeditindentModalLabel').html('<i class="bi bi-pencil"></i> Add Indent');
+                            $('.save_indent_button').html(function (_, html) {
+                                return html.replace('Update', 'Save');
+                            });
+                            $('.delete_indent_button').remove();
+                            $('.approve_indent_button').hide();
+                            $('#indentModal').modal('show');
+
+                            // Initialize tooltips
+                            $('[data-bs-toggle="tooltip"]').tooltip();                            
+                        } else {
+                            toastr.error(response.message);
+                        }
+                    },
+                    error: function (xhr) {
+                            let errorMsg = "Something went wrong while fetching inventory details.";
+
+                            if (xhr.responseJSON && xhr.responseJSON.message) {
+                                errorMsg = xhr.responseJSON.message;
+                            } else if (xhr.responseText) {
+                                try {
+                                    const res = JSON.parse(xhr.responseText);
+                                    if (res.message) {
+                                        errorMsg = res.message;
+                                    }
+                                } catch (e) {
+                                    // Ignore JSON parse errors
+                                }
+                            }
+
+                            toastr.error(errorMsg);
+                        }
+                });
+            } else {
+                toastr.error('Please select at least one inventory.');
+            }
+        });
+    };
+
+    // ====== show_bulk_indent_modal =======
+    window.show_bulk_indent_modal = function () {
+        checkPermissionAndExecute('INDENT', 'add', '1', function () {
+            // Update modal header, button, etc.
+            $('#search_indent_product_name').val('');
+            $('#product_search_list').html('').hide();
+            $("#search_bulk_indent_product").show();
+            $('#addeditindentModalLabel').html('<i class="bi bi-pencil"></i> Add Indent');
+            $("#indent_tbody").html('<tr id="indent_empty_row"><td colspan="8" class="text-center">Please search and add products to indent.</td></tr>');
+            $("#indentModal").modal("show");
+        });
+    }
+
+    $(document).on('click', '.remove-indent-row', function () {
+        $(this).closest('tr').remove();
+    });
+
+    $('#search_indent_product_name').on('keyup', function () {
+        let search = $(this).val();
+        let branch_id = $("#branch_id").val();
+        if (search.length < 2) return;
+
+        $.ajax({
+            url: SearchaddIndentProductlist,
+            type: "GET",
+            data: { search: search, branch_id: branch_id },
+            success: function (response) {
+
+                let suggestionHtml = '';
+
+                response.forEach(product => {
+
+                    const li = document.createElement("li");
+                    li.className = "list-group-item search-product-item";
+
+                    // Data attributes
+                    li.setAttribute("data-id", product.id);
+                    li.setAttribute("data-name", product.product_name ?? product.buyer_product_name);
+                    li.setAttribute("data-spec", product.specification);
+                    li.setAttribute("data-size", product.size);
+                    li.setAttribute("data-uom", product.uom_name);
+
+                    // Visible text (safe for < >)
+                    li.textContent = `${product.product_name ?? product.buyer_product_name} - ${product.specification}`;
+
+                    suggestionHtml += li.outerHTML;
+                });
+                $('#indent_empty_row').remove();
+                $('#product_search_list').html(suggestionHtml).show();
+            }
+        });
+    });
+
+    $(document).on('click', '.search-product-item', function () {
+
+        let id   = $(this).data('id');
+        let name = $(this).data('name');
+        let spec = $(this).data('spec');
+        let size = $(this).data('size');
+        let uom  = $(this).data('uom');
+
+        // Check duplicate inventory_id
+        let exists = false;
+
+        $('input[name="inventory_id[]"]').each(function () {
+            if ($(this).val() == id) {
+                exists = true;
+                return false; // break loop
+            }
+        });
+
+        // If already exists → show message & stop
+        if (exists) {
+            $('#product_search_list').empty().hide();   // clear suggestions
+            $('#search_indent_product_name').val('');
+            toastr.error('This product is already added in the indent list.');
+            return;
+        }
+
+        // Append row if not duplicate
+        let row = `
+            <tr>
+                <input type="hidden" name="inventory_id[]" value="${id}">
+                <td>${name}</td>
+                <td>${spec}</td>
+                <td>${size ?? '--'}</td>
+                <td>${uom ?? '--'}</td>
+                <td><input type="text" class="form-control" name="remarks[]" maxlength="100" style="background-color:#fff"></td>
+                <td><input type="text" class="form-control smt_numeric_only_qty" name="indent_qty[]" maxlength="10" style="background-color:#fff"></td>
+                <td>
+                    <button type="button" class="btn btn-danger width-inherit remove-indent-row" title="Remove">
+                                <i class="fas fa-times"></i>
+                            </button>
+                </td>
+            </tr>
+        `;
+
+        $('#indent_tbody').append(row);
+
+        // clear search
+        $('#product_search_list').hide();
+        $('#search_indent_product_name').val('');
+    });
+    //====show indent modal===
+
+    //===open indent div==//
+    
+    $(document).on("click", ".open_indent_tds", function (event) {
+        checkPermissionAndExecute('INDENT', 'view', '1', () => {
+            let inventory = $(this).attr("tab-index");
+            if (inventory) {
+                event.preventDefault();
+                fetchAndRenderIndentDetails(inventory);
+            }
+        });
+    });
+
+    //===open indent div==//
+
+    //===Close indent div==//
+    $(document).on("click", ".close_indent_tds", function (event) {
+        let inventory = $(this).attr("tab-index");
+        if (inventory) {
+            event.preventDefault();
+            $(".extra_tr_" + inventory).remove();
+            $("#header_" + inventory).remove();
+            $("#plus_" + inventory).css("display", "inline");
+            $("#minus_" + inventory).css("display", "none");
+        }
+    });
+    //===Close indent div==//
+
+    //===indent modal open in edit mode====//
+    $(document).on("click", ".show_edit_indent_model", function () {
+        let self = this;
+        const editPermission = $(self).data("editpermission");
+        if(editPermission!='1'){
+            toastr.error("Unauthorized");
+            return;
+        }else{
+            const indentId = $(self).data("indent");
+            if (!indentId) {
+                toastr.error("Invalid Indent ID");
+                return;
+            }
+
+            $.ajax({
+                url: postindentdataurl,
+                type: "POST",
+                data: {
+                    indent_id: indentId,
+                    _token: $('meta[name="csrf-token"]').attr("content")
+                },
+                success: function (response) {
+                    if (response.status === 1) {
+                        const data = response.data;
+
+                        let specification = data.specification ?? '';
+                        let size = data.size ?? '';
+
+                        let specHtml = specification.length > 10
+                            ? `${specification.substring(0, 10)}...
+                                <i class="bi bi-info-circle-fill ms-1" data-bs-toggle="tooltip" title="${specification.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}"></i>`
+                            : specification;
+
+                        let sizeHtml = size.length > 10
+                            ? `${size.substring(0, 10)}...
+                                <i class="bi bi-info-circle-fill ms-1" data-bs-toggle="tooltip" title="${size.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;")}"></i>`
+                            : size;
+
+                        const row = `
+                            <tr>
+                                <input type="hidden" name="inventory_id" value="${data.inventory_id}">
+                                <input type="hidden" name="indent_id" value="${data.id}">
+                                <td id="indent_product_name">${data.product_name}</td>
+                                <td id="indent_specification">${specHtml}</td>
+                                <td id="indent_size">${sizeHtml}</td>
+                                <td id="indent_uom">${data.uom_name}</td>
+                                <td><input type="text" class="form-control bg-white specialCharacterAllowed" name="remarks" id="indent_remarks" value="${data.remarks ?? ''}" maxlength="100"></td>
+                                <td>
+                                    <input type="hidden" name="min_indent_qty" value="${data.min_indent_qty}">
+                                    <input type="text" class="form-control bg-white smt_numeric_only_qty" name="indent_qty" id="indent_qty" value="${data.indent_qty}" maxlength="10">
+                                </td>
+                            </tr>
+                        `;
+
+                        $('#indent_tbody').html(row);
+                        $('#indent_id').val(data.id);
+                        $('#indent_inventory_id').val(data.inventory_id);
+                        $('#addeditindentModalLabel').html('<i class="bi bi-pencil"></i> Edit Indent');
+                        $('.save_indent_button').html(function(_, html) {
+                            return html.replace('Save', 'Update');
+                        });
+
+
+                        if ($('.delete_indent_button').length) {
+                            $('.delete_indent_button').remove();
+                        }
+
+                        if ($('.approve_indent_button').length) {
+                            $('.approve_indent_button').remove();
+                        }
+
+                        if(data.showApproveButton=='1'){
+                            $('.save_indent_button').after(`
+                                <button type="button" class="ra-btn btn-primary ra-btn-primary text-uppercase text-nowrap font-size-11 ms-2 approve_indent_button" id="approve_indent_button"> <i class="bi bi-save"></i> Approve Indent
+                                </button>
+                            `);
+                        }
+
+                        if (data.showDelete) {
+                            const targetButton = $('.approve_indent_button').length ? $('.approve_indent_button') : $('.save_indent_button');
+
+                            targetButton.after(`
+                                <button type="button" class="ra-btn btn-primary ra-btn-primary text-uppercase text-nowrap font-size-11 ms-2 delete_indent_button">
+                                    <i class="bi bi-trash"></i> Delete Indent
+                                </button>
+                            `);
+                        }
+
+
+                        $('#indentModal').modal('show');
+                        $('[data-bs-toggle="tooltip"]').tooltip();
+                    } else {
+                        toastr.error(response.message);
+                    }
+                },
+                error: function () {
+                    toastr.error("Something went wrong while fetching indent details.");
+                }
+            });
+        };
+    });
+    $(document).on("click", ".unauthorized_edit_indent_model", function () {
+        toastr.error("Unauthorized");
+    });
+
+    //===indent modal in edit mode===//
+
+    // Open Report Modal
+    $('#showreportmodal').click(function (e) {
+        e.preventDefault();
+        $('#reportModal').modal('show');
+    });
+
+    // Open issuedto Modal
+    $('#issuedtoBtn').click(function (e) {
+        e.preventDefault();
+
+        $('.tr_add_more_row').remove();
+        $('.first_issue_to_name').val('');
+
+        $.get(getissuedtoUrl, function (response) {
+            let html = '';
+            let data = (response && response.status && Array.isArray(response.data)) ? response.data : [];
+
+            if (data.length > 0) {
+                var j = 1;
+                for (var i = 0; i < data.length; i++) {
+                    var issue_to_data = data[i];
+                    html += '<tr class="text-center tr_add_more_row" id="IssueToRow_' + j + '">';
+                    html += '<input type="hidden" name="issue_to_id[' + j + ']" value="' + issue_to_data['id'] + '">';
+                    html += '<td class="text-center issueto_count">' + j + '</td>';
+                    html += '<td class="text-center"><span id="smt_noninput_box_itn_' + j + '">' + issue_to_data['name'] + '</span><span id="smt_input_box_itn_' + j + '" style="display:none"><input type="text" title="" name="issue_to_name[' + j + ']"  id="issue_to_name_' + j + '" tab-index="1" class="form-control bg-white desc-details-field issue_to_name remove_first_space" value="' + issue_to_data['name'] + '" maxlength="100" style="width:100%"></span></td>';
+                    html += '<td class="text-center"><button type="button" role="button" aria-label="Edit Row" class="btn btn-link width-inherit py-0 px-2" onclick="editdbissuetorow(' + j + ',' + issue_to_data['id'] + ')"><i class="bi bi-pencil-square text-dark" id="edit_issue_to_icon_' + j + '" aria-hidden="true"></i></button><button type="button" role="button" aria-label="Cross Row" class="btn btn-link width-inherit py-0 px-2" id="cross_issue_to_icon_' + j + '" onclick="crossIssuetorow(' + j + ',' + issue_to_data['id'] + ')"><i class="bi bi-x-circle-fill text-dark" aria-hidden="true"></i></button><button type="button" role="button" aria-label="Delete Row" class="btn btn-link width-inherit py-0 px-2"  onclick="deletedbissuetorow(' + j + ',' + issue_to_data['id'] + ')"><i class="bi bi-trash3 text-dark" aria-hidden="true"></i></button></td>';
+                    html += '</tr>';
+                    j++;
+                }
+
+                $('.issue_to_details_response').html(html);
+                $('#add_more_isssueto_counter').val(j);
+
+                for (var k = 1; k < j; k++) {
+                    $('#cross_issue_to_icon_' + k).hide();
+                }
+            }
+
+            $('#issuedtoModal').modal('show');
+        });
+    });
+
+});
+$(document).on('click', '#add_more_issue_to', function(){
+    var add_more_isssueto_counter = $('#add_more_isssueto_counter').val();
+    let i = 1;
+    $('.issueto_count').each(function() {
+       i++;
+    });
+    
+    var z = false;
+    if(parseInt(i)>50){
+        z =true;
+    }
+    if(!z){
+        var html = '';
+        html +='<tr class="text-center tr_add_more_row" id="IssueToRow_'+add_more_isssueto_counter+'">';
+            html+='<td class="text-center issueto_count"></td>';
+            html+='<td class="text-center"><input type="text" title="" name="issue_to_name['+add_more_isssueto_counter+']"  id="issue_to_name_'+add_more_isssueto_counter+'" tab-index="1" class="form-control bg-white desc-details-field issue_to_name remove_first_space" value="" maxlength="100" style="width:100%"></td>';
+            html+='<td class="text-center"><button type="button" role="button" aria-label="Delete Row" class="btn btn-link width-inherit py-0 px-2" onclick="deleteissuetorow('+add_more_isssueto_counter+')"><i class="bi bi-trash3 text-dark" aria-hidden="true"></i></button></td>';
+        html +='</tr>';
+        add_more_isssueto_counter_nxt =parseInt(add_more_isssueto_counter)+1;
+        $('#add_more_isssueto_counter').val(add_more_isssueto_counter_nxt);
+        $('.issue_to_details_response').append(html);
+        let i = 1;
+        $('.issueto_count').each(function() {
+        $(this).html(i);
+        i++;
+        });
+    }
+    else{
+        toastr.error('You can add only 50 Issue To Name');
+    }
+});
+function editdbissuetorow(rowIndex) {
+    $('#smt_noninput_box_itn_' + rowIndex).hide();
+    $('#smt_input_box_itn_' + rowIndex).show();
+    $('#edit_issue_to_icon_' + rowIndex).hide();
+    $('#cross_issue_to_icon_' + rowIndex).show();
+    $('#issue_to_name_' + rowIndex).focus();
+}
+
+function crossIssuetorow(rowIndex){
+    $('#edit_issue_to_icon_' + rowIndex).show();
+    $('#smt_noninput_box_itn_' + rowIndex).show();
+    $('#smt_input_box_itn_' + rowIndex).hide();
+    $('#cross_issue_to_icon_' + rowIndex).hide();
+}
+
+function deleteissuetorow(id){
+    if(id){
+        if(confirm("Are you sure, you want to delete this row!")){
+            $('#IssueToRow_'+id).remove();
+            let i = 1;
+            $('.issueto_count').each(function() {
+                $(this).html(i);
+                i++;
+            });
+        }
+    }
+}
+let isSaveIssueToSubmitting = false;
+
+$(document).on('click', '#save_issue_to_button', function(event) {
+    event.preventDefault();
+
+    if (isSaveIssueToSubmitting) return;
+
+    let hasError = false;
+    let allIssueToNames = [];
+
+    $('.issue_to_name').each(function() {
+        const $field = $(this);
+        const nameVal = $field.val().trim().toLowerCase();
+        $field.css('border', '');
+
+        if (nameVal === "") {
+            toastr.error('Issue To Name is required');
+            $field.focus();
+            $field.css('border', '1px solid red');
+            hasError = true;
+            return false; // Stop .each loop
+        }
+
+        if (allIssueToNames.includes(nameVal)) {
+            toastr.error('Issue To Name cannot be duplicated');
+            $field.focus();
+            $field.css('border', '1px solid red');
+            hasError = true;
+            return false; // Stop .each loop
+        }
+
+        allIssueToNames.push(nameVal);
+    });
+
+    if (hasError) return;
+
+    const formData = $('#issue_to_data_form').serialize();
+
+    isSaveIssueToSubmitting = true;
+    $('#save_issue_to_button').prop('disabled', true);
+
+    $.ajax({
+        url: saveissuedtoUrl,
+        type: "POST",
+        dataType: 'json',
+        data: formData,
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        },
+        success: function(response) {
+            if (response.status == '1') {
+                toastr.success(response.msg);
+                $('#issuedtoModal').modal('hide');
+                $('#issue_to_data_form')[0].reset(); // Optional: reset form
+            } else {
+                toastr.error(response.msg || 'Failed to save.');
+            }
+        },
+        error: function() {
+            toastr.error('Something went wrong. Please try again.');
+        },
+        complete: function() {
+            isSaveIssueToSubmitting = false;
+            $('#save_issue_to_button').prop('disabled', false);
+        }
+    });
+});
+
+function deletedbissuetorow(ids,dbid){
+    if(ids){
+        if(confirm("Are you sure, you want to delete this Record!")){
+            $.ajax({
+                url: deleteissuedtoUrl,
+                type: "POST",
+                dataType: 'json',
+                data: {
+                    dbid: dbid,
+                },
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                },
+                beforeSend: function() {},
+                success: function(response) {
+                    if (response.status == '1') {
+                        toastr.success(response.msg);
+                        $('#IssueToRow_' + ids).remove();
+                    } else {
+                        toastr.error(response.msg);
+                    }
+                    let i=1;
+                    $('.issueto_count').each(function() {
+                        $(this).html(i);
+                        i++;
+                    });
+                },
+                error: function() {
+                    toastr.error('Something Went Wrong..');
+                },
+                complete: function() {}
+            });
+        }
+    }
+}

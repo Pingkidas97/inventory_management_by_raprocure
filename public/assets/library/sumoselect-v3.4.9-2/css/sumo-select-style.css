@@ -1,0 +1,10 @@
+.SumoSelect .select-all {
+    height: 35px;
+}
+.SumoSelect {
+    width: 100%;
+}
+.SumoSelect>.CaptionCont>span.placeholder {
+    color: #212529;
+    font-style: normal;
+}

@@ -1,0 +1,80 @@
+/* Styles for the suggestion dropdown */
+.suggestions-box {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #ccc;
+  max-height: 200px;
+  overflow-y: auto;
+  width: 100%;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.suggestions-box ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestions-box ul li {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f1f1;
+}
+
+.suggestions-box ul li:last-child {
+  border-bottom: none;
+}
+
+.suggestions-box ul li:hover {
+  background: #f8f9fa;
+}
+#productSuggestions {
+  position: absolute;
+  width: 15%;
+  max-height: 30vh;
+  overflow-y: auto;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  z-index: 1000;
+  box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#productSuggestions a {
+  display: block;
+  padding: 8px 10px;
+  text-decoration: none;
+  color: #eb8153;
+  cursor: pointer;
+  background-color: #f0f0f0;
+}
+
+#productSuggestions a:hover {
+  color: #0b0b0b;
+}
+#productSuggestions {
+  white-space: normal;
+}
+
+.filterinbox {
+    padding-top: 0.5rem !important;
+    width: 170px!important;
+}
+
+/* Vertically center the input text */
+/* .form-floating .reportinputdiv .form-control {
+    padding-top: 1.15rem;
+    padding-bottom: 0.45rem;
+} */
+
+/* General label styling */
+/* .form-floating > label {
+    text-transform: none !important;
+    font-size: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.25rem;
+} */
+
+
