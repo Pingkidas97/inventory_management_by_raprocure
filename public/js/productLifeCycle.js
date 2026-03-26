@@ -31,8 +31,8 @@ function product_life_cycle_modal() {
                 return `
                     <div class="mb-2">
                         <div class="section-header d-flex justify-content-between align-items-center bg-secondary text-white px-3 py-2"
-                             style="cursor:pointer;"
-                             data-target="#section-content-${secId}">
+                            style="cursor:pointer;"
+                            data-target="#section-content-${secId}">
                             <span class="fw-semibold">${title}</span>
                             <span class="arrow-icon">▲</span>
                         </div>
@@ -49,263 +49,249 @@ function product_life_cycle_modal() {
                 let productName = item.product_name ?? "";
                 let extra = [item.specification, item.size].filter(Boolean).join(' - ');
 
-                // ===== Order Details =====
-                let ordersHtml = '';
-                if (item.orders && item.orders.length > 0) {
-                    item.orders.forEach(function(order) {
+                // ===== Manual Orders =====
+                let orderTableHtml = '';
+                if (item.manualPo && item.manualPo.length > 0) {
+                    let ordersHtml = '';
+                    item.manualPo.forEach(function(order) {
                         ordersHtml += `
                             <tr>
-                                <td>${order.order_no}</td>
-                                <td>${order.rfq_no ?? '-'}</td>
-                                <td>${order.order_date ?? ''}</td>
-                                <td>${order.order_qty}</td>
-                                <td>${order.rate}</td>
-                                <td>${order.vendor_name}</td>
-                                <td>${order.order_status}</td>
+                                <!--
                                 <td>
-                                    <a href="${order.basePoUrl}" target="_blank" class="ra-btn ra-btn-primary font-size-11 w-100 justify-content-center">
-                                        <i class="fa fa-eye me-1"></i> View
-                                    </a>
+                                    <div class="d-flex align-items-center justify-content-between">
+                                        <span>${order.order_no} [${order.order_status ?? '-'}]</span>
+                                        <a href="${order.basePoUrl}" target="_blank" class="ra-btn font-size-11 ms-2">
+                                            <i class="fa fa-eye"></i>
+                                        </a>
+                                    </div>
                                 </td>
+                                -->
+                                <td>${order.order_date ?? '-'}</td>
+                                <td>${order.order_qty ?? '-'}</td>
+                                <!--
+                                <td>${order.rate ?? '-'}</td>
+                                <td>${order.vendor_name ?? '-'}</td>
+                                -->                                
                             </tr>
                         `;
                     });
-                } else {
-                    ordersHtml = `<tr><td colspan="7" class="text-center">No Orders Found</td></tr>`;
-                }
-
-                let orderTableHtml = `
-                    <table class="table table-bordered table-sm mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Order No</th>
-                                <th>RFQ No</th>
-                                <th>Date</th>
-                                <th>Qty</th>
-                                <th>Rate</th>
-                                <th>Vendor</th>
-                                <th>Status</th>
-                                <th>View</th>
-                            </tr>
-                        </thead>
-                        <tbody>${ordersHtml}</tbody>
-                    </table>
-                `;
-
-                // ===== Indent Details =====
-                let indentHtml = '';
-                if (item.indent_details && item.indent_details.length > 0) {
-                    item.indent_details.forEach(indent => {
-                        indentHtml += `
-                            <tr>
-                                <td>${indent.indent_number}</td>
-                                <td>${indent.indent_qty}</td>
-                                <td>${indent.status}</td>
-                                <td>${indent.added_date}</td>
-                            </tr>
-                        `;
-                    });
-                    indentHtml = `
+                    orderTableHtml = `
                         <table class="table table-bordered table-sm mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Indent No</th>
+                                    <!-- <th>Order No</th> -->
+                                    <th>Order Date</th>
+                                    <th>Order Qty</th>
+                                    <!-- <th>Rate</th> -->
+                                    <!-- <th>Vendor</th> -->
+                                </tr>
+                            </thead>
+                            <tbody>${ordersHtml}</tbody>
+                        </table>
+                    `;
+                } else {
+                    orderTableHtml = `<div class="text-center text-muted">No Orders Found</div>`;
+                }
+
+                // ===== Indents =====
+                let indentTableHtml = '';
+
+                if (item.indent && item.indent.length > 0) {
+                    let indentHtml = '';
+
+                    item.indent.forEach((indent) => {
+                        const rfqs = indent.indentRFQ || [];
+
+                        if (rfqs.length === 0) {
+                            indentHtml += `
+                                <tr>
+                                    <td>${indent.added_date ?? '-'}</td>
+                                    <td>${indent.indent_qty ?? '-'} [${indent.status ?? '-'}]</td>
+                                    <td colspan="8" class="text-center">No Transaction Available</td>
+                                </tr>
+                            `;
+                            return;
+                        }
+
+                        let indentRowspan = 0;
+
+                        rfqs.forEach(rfq => {
+                            const orders = rfq.orders || [];
+
+                            if (orders.length === 0) {
+                                indentRowspan += 1;
+                            } else {
+                                orders.forEach(order => {
+                                    const grns = order.grn?.length ? order.grn : [null];
+
+                                    grns.forEach(grn => {
+                                        const issues = grn?.issue?.length ? grn.issue : [null];
+
+                                        issues.forEach(issue => {
+                                            const consumes = issue?.consume?.length ? issue.consume : [null];
+                                            indentRowspan += consumes.length;
+                                        });
+                                    });
+                                });
+                            }
+                        });
+
+                        rfqs.forEach((rfq, j) => {
+                            const orders = rfq.orders || [];
+
+                            if (orders.length === 0) {
+                                indentHtml += '<tr>';
+
+                                if (j === 0) {
+                                    indentHtml += `<td rowspan="${indentRowspan}">${indent.added_date ?? '-'}</td>`;
+                                    indentHtml += `<td rowspan="${indentRowspan}">${indent.indent_qty ?? '-'} [${indent.status ?? '-'}]</td>`;
+                                }
+
+                                indentHtml += `<td>${rfq.rfq_date ?? '-'}</td>`;
+                                indentHtml += `<td>${rfq.rfq_qty ?? '-'}</td>`;
+                                indentHtml += `<td colspan="6" class="text-center">No Transaction Available</td>`;
+                                indentHtml += '</tr>';
+                                return;
+                            }
+
+                            let rfqRowspan = 0;
+
+                            orders.forEach(order => {
+                                const grns = order.grn?.length ? order.grn : [null];
+
+                                grns.forEach(grn => {
+                                    const issues = grn?.issue?.length ? grn.issue : [null];
+
+                                    issues.forEach(issue => {
+                                        const consumes = issue?.consume?.length ? issue.consume : [null];
+                                        rfqRowspan += consumes.length;
+                                    });
+                                });
+                            });
+
+                            orders.forEach((order, k) => {
+                                const grns = order.grn?.length ? order.grn : [null];
+
+                                grns.forEach((grn, g) => {
+                                    const issues = grn?.issue?.length ? grn.issue : [null];
+
+                                    issues.forEach((issue, i) => {
+                                        const consumes = issue?.consume?.length ? issue.consume : [null];
+
+                                        consumes.forEach((consume, c) => {
+
+                                            indentHtml += '<tr>';
+
+                                            // INDENT
+                                            if (j === 0 && k === 0 && g === 0 && i === 0 && c === 0) {
+                                                indentHtml += `<td rowspan="${indentRowspan}">${indent.added_date ?? '-'}</td>`;
+                                                indentHtml += `<td rowspan="${indentRowspan}">${indent.indent_qty ?? '-'} [${indent.status ?? '-'}]</td>`;
+                                            }
+
+                                            // RFQ
+                                            if (k === 0 && g === 0 && i === 0 && c === 0) {
+                                                indentHtml += `<td rowspan="${rfqRowspan}">${rfq.rfq_date ?? '-'}</td>`;
+                                                indentHtml += `<td rowspan="${rfqRowspan}">${rfq.rfq_qty ?? '-'}</td>`;
+                                            }
+
+                                            // ORDER
+                                            if (g === 0 && i === 0 && c === 0) {
+                                                let orderRowspan = 0;
+
+                                                grns.forEach(gr => {
+                                                    const iss = gr?.issue?.length ? gr.issue : [null];
+                                                    iss.forEach(is => {
+                                                        const cons = is?.consume?.length ? is.consume : [null];
+                                                        orderRowspan += cons.length;
+                                                    });
+                                                });
+
+                                                indentHtml += `<td rowspan="${orderRowspan}">${order.order_date ?? '-'}</td>`;
+                                                indentHtml += `<td rowspan="${orderRowspan}">${order.order_qty ?? '-'} [${order.order_status ?? '-'}]</td>`;
+                                            }
+
+                                            // GRN
+                                            if (i === 0 && c === 0) {
+                                                let grnRowspan = 0;
+
+                                                issues.forEach(is => {
+                                                    const cons = is?.consume?.length ? is.consume : [null];
+                                                    grnRowspan += cons.length;
+                                                });
+
+                                                if (grn) {
+                                                    indentHtml += `<td rowspan="${grnRowspan}">${grn.added_date ?? '-'}</td>`;
+                                                    indentHtml += `<td rowspan="${grnRowspan}">${grn.grn_qty ?? '-'}</td>`;
+                                                } else {
+                                                    indentHtml += `<td colspan="2" class="text-center">No GRN</td>`;
+                                                }
+                                            }
+
+                                            // ISSUE
+                                            if (c === 0) {
+                                                let issueRowspan = consumes.length;
+
+                                                if (issue) {
+                                                    indentHtml += `<td rowspan="${issueRowspan}">${issue.added_date ?? '-'}</td>`;
+                                                    indentHtml += `<td rowspan="${issueRowspan}">${issue.qty ?? '-'}</td>`;
+                                                } else {
+                                                    indentHtml += `<td colspan="2" class="text-center">No Issue</td>`;
+                                                }
+                                            }
+
+                                            // CONSUME
+                                            if (consume) {
+                                                indentHtml += `<td>${consume.added_date ?? '-'}</td>`;
+                                                indentHtml += `<td>${consume.qty ?? '-'}</td>`;
+                                            } else {
+                                                indentHtml += `<td colspan="2" class="text-center">No Consume</td>`;
+                                            }
+
+                                            indentHtml += '</tr>';
+                                        });
+                                    });
+                                });
+                            });
+                        });
+                    });
+
+                    indentTableHtml = `
+                        <table class="table table-bordered table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Indent Date</th>
                                     <th>Qty</th>
-                                    <th>Status</th>
-                                    <th>Added Date</th>
+                                    <th>RFQ Date</th>
+                                    <th>RFQ Qty</th>
+                                    <th>Order Date</th>
+                                    <th>Order Qty</th>
+                                    <th>GRN Date</th>
+                                    <th>GRN Qty</th>
+                                    <th>Issue Date</th>
+                                    <th>Issue Qty</th>
+                                    <th>Consume Date</th>
+                                    <th>Consume Qty</th>
                                 </tr>
                             </thead>
                             <tbody>${indentHtml}</tbody>
                         </table>
                     `;
                 } else {
-                    indentHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Indent No</th>
-                                    <th>Qty</th>
-                                    <th>Status</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="4" class="text-center">No Indent Found</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    `;
+                    indentTableHtml = `<div class="text-center text-muted">No Indent Found</div>`;
                 }
 
-                // ===== GRN Details =====
-                let grnHtml = '';
-                if (item.grn_details && item.grn_details.length > 0) {
-                    item.grn_details.forEach(grn => {
-                        grnHtml += `
-                            <tr>
-                                <td>${grn.grn_no}</td>
-                                <td>${grn.grn_reference}</td>
-                                <td>${grn.grn_qty}</td>
-                                <td>${grn.rate}</td>
-                                <td>${grn.added_date}</td>
-                            </tr>
-                        `;
-                    });
-                    grnHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Grn No</th>
-                                    <th>Grn Reference</th>
-                                    <th>Qty</th>
-                                    <th>Rate</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>${grnHtml}</tbody>
-                        </table>
-                    `;
-                } else {
-                    grnHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Grn No</th>
-                                    <th>Grn Reference</th>
-                                    <th>Qty</th>
-                                    <th>Rate</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="5" class="text-center">No GRN Found</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    `;
-                }
-                // ===== Issue Details =====
-                let issueHtml = '';
-                if (item.issue_details && item.issue_details.length > 0) {
-                    item.issue_details.forEach(issue => {
-                        issueHtml += `
-                            <tr>
-                                <td>${issue.issued_no}</td>
-                                <td>${issue.reference}</td>
-                                <td>${issue.qty}</td>
-                                <td>${issue.rate}</td>
-                                <td>${issue.added_date}</td>
-                            </tr>
-                        `;
-                    });
-                    issueHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Issue No</th>
-                                    <th>Issue Reference</th>
-                                    <th>Qty</th>
-                                    <th>Rate</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>${issueHtml}</tbody>
-                        </table>
-                    `;
-                } else {
-                    issueHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Issue No</th>
-                                    <th>Issue Reference</th>
-                                    <th>Qty</th>
-                                    <th>Rate</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="5" class="text-center">No Issue Found</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    `;
-                }
-                // ===== Consume Details =====
-                let consumeHtml = '';
-                if (item.consume_details && item.consume_details.length > 0) {
-                    item.consume_details.forEach(consume => {
-                        consumeHtml += `
-                            <tr>
-                                <td>${consume.issued_no}</td>
-                                <td>${consume.reference}</td>
-                                <td>${consume.issue_qty}</td>
-                                <td>${consume.consume_no}</td>
-                                <td>${consume.qty}</td>
-                                <td>${consume.rate}</td>
-                                <td>${consume.added_date}</td>
-                            </tr>
-                        `;
-                    });
-                    consumeHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Issue No</th>
-                                    <th>Issue Reference</th>
-                                    <th>Issue Qty</th>
-                                    <th>Consume No</th>
-                                    <th>Consume Qty</th>
-                                    <th>Rate</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>${consumeHtml}</tbody>
-                        </table>
-                    `;
-                } else {
-                    consumeHtml = `
-                        <table class="table table-bordered table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Issue No</th>
-                                    <th>Issue Reference</th>
-                                    <th>Issue Qty</th>
-                                    <th>Consume No</th>
-                                    <th>Consume Qty</th>
-                                    <th>Rate</th>
-                                    <th>Added Date</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="7" class="text-center">No Consume Found</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    `;
-                }
-
-
-
-
-                // Combine all inner sections
+                // ===== Combine sections =====
                 let allSectionsHtml = '';
-                allSectionsHtml += createSection('Order Details', orderTableHtml, `${index}_1`);
-                allSectionsHtml += createSection('Indent Details', indentHtml, `${index}_2`);
-                allSectionsHtml += createSection('GRN Details', grnHtml, `${index}_3`);
-                allSectionsHtml += createSection('Issue Details', issueHtml, `${index}_4`);
-                allSectionsHtml += createSection('Consume Details', consumeHtml, `${index}_5`);
+                allSectionsHtml += createSection('RFQ Order Flow', indentTableHtml, `${index}_1`);
+                allSectionsHtml += createSection('Manual Order Flow', orderTableHtml, `${index}_2`);
 
+                // ===== Build row for this product =====
                 rows += `
                     <tr>
                         <th class="p-0 border-0">
                             <div class="product-header p-2 mb-3 d-flex justify-content-between align-items-center"
-                                 style="background: linear-gradient(to right, #0d4c7d, #2e86c1); color:white; cursor:pointer;"
-                                 data-target="#product-sections-${index}">
+                                style="background: linear-gradient(to right, #0d4c7d, #2e86c1); color:white; cursor:pointer;"
+                                data-target="#product-sections-${index}">
                                 <strong>${productName}${extra ? ' - ' + extra : ''}</strong>
                                 <span class="arrow-icon">▲</span>
                             </div>
@@ -320,7 +306,7 @@ function product_life_cycle_modal() {
 
             $("#inventory_details_body").html(rows);
 
-            // Toggle for product header (collapse/expand all inner sections)
+            // Toggle for product header
             $("#inventory_details_body").off('click', '.product-header').on('click', '.product-header', function() {
                 const $header = $(this);
                 const targetSelector = $header.data('target');
@@ -332,7 +318,7 @@ function product_life_cycle_modal() {
                 });
             });
 
-            // Toggle for inner sections (order, indent, grn, etc.)
+            // Toggle for inner sections
             $("#inventory_details_body").off('click', '.section-header').on('click', '.section-header', function() {
                 const $header = $(this);
                 const targetSelector = $header.data('target');

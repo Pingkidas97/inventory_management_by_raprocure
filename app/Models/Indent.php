@@ -56,7 +56,8 @@ class Indent extends Model
     public function indentRfqs()
     {
         return $this->hasMany(IndentRfq::class, 'indent_id', 'id')
-                    ->whereColumn('inventory_id', 'indent.inventory_id');
+                    // ->whereColumn('inventory_id', 'indent.inventory_id');
+                ->where('inventory_id', $this->inventory_id);
     }
 
 

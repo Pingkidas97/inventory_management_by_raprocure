@@ -15,12 +15,15 @@ use App\Models\RfqProductVariant;
 use App\Models\ForceClosure;
 use Illuminate\Support\Facades\Auth;
 use App\Helpers\NumberFormatterHelper;
+use App\Traits\TrimFields;
+use App\Traits\HasModulePermission;
 
 use DB;
 
 class ForceClosureController extends Controller
 {
-
+    use TrimFields;
+    use HasModulePermission;
     public function fetchInventoryDetails(Request $request)
     {
         if (Auth::user()->parent_id != 0) {

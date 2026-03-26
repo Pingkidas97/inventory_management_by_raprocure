@@ -89,6 +89,16 @@ class Inventories extends Model
                     ->where('closed_indent', 2)
                     ->where('is_deleted', 2);
     }
+    public function indentsForPLC()
+    {
+        return $this->hasMany(Indent::class,'inventory_id')->where('is_active', 1)->where('is_deleted', 2);
+    }
+    
+    public function manualOrderProductForPLC()
+    {
+        return $this->hasMany(ManualOrderProduct::class,'inventory_id');
+    }
+    
     public function indentRfqs()
     {
         return $this->hasMany(IndentRfq::class, 'inventory_id');

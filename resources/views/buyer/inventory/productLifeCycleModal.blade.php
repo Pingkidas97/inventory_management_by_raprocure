@@ -6,7 +6,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <table class="table table-bordered">
+                <table class="product-listing-table invengtory-all-table">
                     <tbody id="inventory_details_body">
                     </tbody>
                 </table>

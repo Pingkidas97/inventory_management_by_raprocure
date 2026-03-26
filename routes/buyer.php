@@ -24,6 +24,7 @@ use App\Http\Controllers\Buyer\GrnController;
 use App\Http\Controllers\Buyer\GetPassController;
 use App\Http\Controllers\Buyer\IssueReturnController;
 use App\Http\Controllers\Buyer\StockReturnController;
+use App\Http\Controllers\Buyer\ProductLifeCycleController;
 use App\Http\Controllers\Buyer\InventoryPermissionCheckController;
 use App\Services\ExportService;
 //end inventory section
@@ -157,7 +158,7 @@ Route::name('buyer.')->group(function() {
                 Route::get('/getpass-download/{getPassId}', [GetPassController::class, 'downloadPdf']) ->name('getpass.download');
 
                 Route::post('/get-pass/store', [GetPassController::class, 'store'])->name('getpass.store');
-                Route::post('/productLifeCycle', [InventoryController::class, 'productLifeCycle'])->name('productLifeCycle');
+                Route::post('/productLifeCycle', [ProductLifeCycleController::class, 'productLifeCycle'])->name('productLifeCycle');
 
                 // Product Routes
                 Route::get('/search-products', [InventoryVendorProductController::class, 'search'])->name('product.search');
