@@ -218,7 +218,7 @@
             }
 
             const formData = $('#addIssueForm').serialize();
-            console.log(formData);
+            // console.log(formData);
             $.ajax({
                 url: "{{ route('buyer.issue.store') }}",
                 type: "POST",

@@ -23,7 +23,7 @@ class ProductLifeCycleController extends Controller
             ]);
         }
 
-        $inventories = Inventories::with(['product', 'indentsForPLC', 'manualOrderProductForPLC'])
+        $inventories = Inventories::with(['product', 'indentsForPLC', 'manualOrderProductForPLC','RfqProductVariantForPLC'])
             ->whereIn('id', $ids)
             ->select('id', 'product_id', 'specification', 'size', 'buyer_product_name')
             ->get();
@@ -76,12 +76,13 @@ class ProductLifeCycleController extends Controller
                 // grouping key
                 $issuedId   = $consume->issued_id ?? 0;
                 $inventoryId = $issued->inventory_id ?? 0;
-
+                $grn=$issued->grn;
                 // push
-                $consumeData[$issuedId][$inventoryId][] = $item;
+                $consumeData[$grn->grn_type][$grn->order_id][$inventoryId][] = $item;
             }
         }
-        $issues = Issued::whereIn('inventory_id', $ids)
+        $issues = Issued::with('grn')
+            ->whereIn('inventory_id', $ids)
             ->where('issued_return_for', '<>', 0)
             ->orderBy('updated_at', 'desc')
             ->orderBy('issued_no', 'desc')
@@ -91,7 +92,7 @@ class ProductLifeCycleController extends Controller
 
         if (!$issues->isEmpty()) {
             foreach ($issues as $issue) {
-
+                $grn=$issue->grn;
                 $item = [
                     'issued_no'   => $issue->issued_no ?? '-',
                     'qty'         => NumberFormatterHelper::formatQty(
@@ -105,8 +106,8 @@ class ProductLifeCycleController extends Controller
                                     ),
                     'added_date'  => $issue->updated_at
                                         ? \Carbon\Carbon::parse($issue->updated_at)->format('d/m/Y')
-                                        : '-',
-                    'consume'    =>$consumeData[$issue->id][$issue->inventory_id]??[]
+                                        : '-'
+                    
                 ];
 
                 // grouping keys
@@ -114,7 +115,7 @@ class ProductLifeCycleController extends Controller
                 $inventoryId = $issue->inventory_id ?? 0;
 
                 // push into array
-                $issueData[$returnFor][$inventoryId][] = $item;
+                $issueData[$grn->grn_type][$grn->order_id][$inventoryId][] = $item;
             }
         }
         $grns = Grn::with(['inventory', 'inventory.product'])
@@ -154,7 +155,7 @@ class ProductLifeCycleController extends Controller
                     'grn_reference' => $grn->reference_number,
                     'rate' => NumberFormatterHelper::formatCurrency($grn->rate, session('user_currency')['symbol'] ?? '₹'),
                     'added_date' => $grn->updated_at?->format('d/m/Y') ?? '-',
-                    'issue' => $issueData[$grn->id][$grn->inventory_id] ?? []
+                    
                 ];
 
                 // keys
@@ -167,7 +168,7 @@ class ProductLifeCycleController extends Controller
             }
         }
            
-        $finalData = $inventories->map(function ($inventory) use($grnData) {
+        $finalData = $inventories->map(function ($inventory) use($grnData,$issueData,$consumeData) {
 
             return [
                 'inventory_id'  => $inventory->id,
@@ -175,30 +176,37 @@ class ProductLifeCycleController extends Controller
                 'specification' => $inventory->specification,
                 'size'          => $inventory->size,
 
-                'indent' => $inventory->indentsForPLC->map(function ($indent)use ($inventory,$grnData) {
+                'indent' => $inventory->indentsForPLC->map(function ($indent)use ($inventory,$grnData,$issueData,$consumeData) {                    
                     $status = $indent->is_deleted == 1 ? 'Deleted' :
                             ($indent->is_active == 2 ? 'Unapproved' :
                             ($indent->closed_indent == 1 ? 'Closed' : 'Approved'));
-
-                    // Map RFQs linked to this indent
-                    $indentRFQData = $indent->indentRfqs->map(function ($indentRFQ) use ($inventory,$grnData) {
-                        $rfq = $indentRFQ->rfq;
+                    return [
+                        'indent_number' => $indent->inventory_unique_id ?? '-',
+                        'indent_qty'    => NumberFormatterHelper::formatQty($indent->indent_qty, session('user_currency')['symbol'] ?? '₹'),
+                        'status'        => $status,
+                        'added_date'    => $indent->created_at?->format('d/m/Y') ?? '-',                        
+                    ];
+                }),
+                'rfq' => $inventory->RfqProductVariantForPLC->map(function ($RfqProductVariant)use ($inventory,$grnData,$issueData,$consumeData) { 
+                    
+                    
+                        $rfq = $RfqProductVariant->rfq;
 
                         if (!$rfq) return null;
 
                         $totalQty = $rfq->rfqProductVariants
-                                        ->where('inventory_id', $indentRFQ->inventory_id)
+                                        ->where('inventory_id', $RfqProductVariant->inventory_id)
                                         ->where('inventory_status', 1)
                                         ->sum('quantity');
 
                         
-                        // Inside the map function for indentRFQ -> orders
+                        // Inside the map function for RfqProductVariant -> orders
                         $orders = [];
                         $variantId = $rfq->rfqProductVariants->pluck('id')->first(); // first variant
 
                         foreach ($rfq->orders as $order) {
                             foreach ($order->order_variants as $ov) {
-                                if ($ov->inventory_id == $indentRFQ->inventory_id || $ov->rfq_product_variant_id == $variantId) {                                   
+                                if ($ov->inventory_id == $RfqProductVariant->inventory_id || $ov->rfq_product_variant_id == $variantId) {                                   
 
                                     $currency = $order->vendor_currency ?? '₹';
                                     $orders[] = [
@@ -211,7 +219,9 @@ class ProductLifeCycleController extends Controller
                                         'basePoUrl'    => route('buyer.rfq.order-confirmed.view', ['id' => $order->id]),
                                         'order_status' => $order->order_status == '1' ? 'Confirm' : 'Cancel',
                                         'type'         => 'rfq',
-                                        'grn'          => $grnData[1][$order->id][$indentRFQ->inventory_id] ?? []
+                                        'grn'          => $grnData[1][$order->id][$RfqProductVariant->inventory_id] ?? [],
+                                        'issue'        => $issueData[1][$order->id][$RfqProductVariant->inventory_id] ?? [],
+                                        'consume'      => $consumeData[1][$order->id][$RfqProductVariant->inventory_id]??[]
                                     ];
                                 }
                             }
@@ -223,25 +233,17 @@ class ProductLifeCycleController extends Controller
                             'rfq_closed'      => in_array($rfq->buyer_rfq_status, [8, 10]) ? 'Closed' : '',
                             'rfq_qty'         => NumberFormatterHelper::formatQty($totalQty, session('user_currency')['symbol'] ?? '₹'),
                             'rfq_id'          => $rfq->rfq_id,
-                            'used_indent_qty' => NumberFormatterHelper::formatQty($indentRFQ->used_indent_qty, session('user_currency')['symbol'] ?? '₹'),
                             'orders'          => $orders, // attach orders here
                         ];
-                    })->filter()->values(); // remove nulls
-
-                    return [
-                        'indent_number' => $indent->inventory_unique_id ?? '-',
-                        'indent_qty'    => NumberFormatterHelper::formatQty($indent->indent_qty, session('user_currency')['symbol'] ?? '₹'),
-                        'status'        => $status,
-                        'added_date'    => $indent->created_at?->format('d/m/Y') ?? '-',
-                        'indentRFQ'     => $indentRFQData,
-                    ];
+                    
                 }),
-                'manualPo' => $inventory->manualOrderProductForPLC->map(function ($product) {
+                'manualPo' => $inventory->manualOrderProductForPLC->map(function ($product)use($grnData,$issueData,$consumeData) {
                                 $order = $product->manualOrder;
                                 $currency = $order->currencyDetails?->currency_symbol ?? '₹';
 
                                 return [
                                     'order_id'     => $order->id,
+                                    'inventory_id'     => $product->inventory_id,
                                     'order_no'     => $order->manual_po_number ?? 'N/A',
                                     'order_date'   => $order->created_at?->format('d/m/Y') ?? '-',
                                     'order_qty'    => NumberFormatterHelper::formatQty(
@@ -256,7 +258,9 @@ class ProductLifeCycleController extends Controller
                                     'basePoUrl'    => route('buyer.report.manualPO.orderDetails', ['id' => $order->id]),
                                     'type'         => 'manual',
                                     'order_status' => $order->order_status == '1' ? 'Confirm' : 'Cancel',
-                                    'grn'          => $grnData[4][$order->id][$product->inventory_id] ?? []
+                                    'grn'          => $grnData[4][$order->id][$product->inventory_id] ?? [],                                    
+                                    'issue'        => $issueData[4][$order->id][$product->inventory_id] ?? [],
+                                    'consume'      => $consumeData[4][$order->id][$product->inventory_id]??[]
                                 ];
                             }),
             ];

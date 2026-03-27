@@ -56,9 +56,9 @@ class Issued extends Model
 
     public function grn()
     {
-        return $this->belongsTo(Grn::class, 'issued_return_for');
+        return $this->belongsTo(Grn::class, 'issued_return_for','id');
     }
-
+    
     public function getAmountAttribute()
     {
         if ($this->issued_return_for == 0) {
@@ -107,4 +107,5 @@ class Issued extends Model
     {
         return $this->hasMany(Consume::class, 'issued_id');
     }
+    
 }

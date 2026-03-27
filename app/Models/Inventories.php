@@ -98,6 +98,10 @@ class Inventories extends Model
     {
         return $this->hasMany(ManualOrderProduct::class,'inventory_id');
     }
+    public function RfqProductVariantForPLC()
+    {
+        return $this->hasMany(RfqProductVariant::class,'inventory_id');
+    }
     
     public function indentRfqs()
     {
