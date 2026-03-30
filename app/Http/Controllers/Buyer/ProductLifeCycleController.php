@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\Inventories;
 use App\Models\Grn;
 use App\Models\Issued;
-use App\Models\consume;
+use App\Models\Consume;
 use App\Helpers\NumberFormatterHelper;
 
 class ProductLifeCycleController extends Controller
