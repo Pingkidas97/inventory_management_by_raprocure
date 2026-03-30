@@ -25,9 +25,11 @@ use App\Http\Controllers\Buyer\ProductWiseStockLedgerController;
 use App\Http\Controllers\Buyer\GrnController;
 use App\Http\Controllers\Buyer\IssueReturnController;
 use App\Http\Controllers\Buyer\StockReturnController;
+use App\Http\Controllers\Buyer\GrnToleranceController;
 use App\Services\ExportService;
 use App\Http\Controllers\Buyer\GetPassController;
 use App\Http\Controllers\Buyer\WorkOrderController;
+use App\Http\Controllers\Buyer\ProductLifeCycleController;
 //end inventory section
 use App\Http\Controllers\Buyer\SearchProductController;
 use App\Http\Controllers\Buyer\ActiveRFQController;
@@ -353,7 +355,8 @@ Route::name('buyer.')->group(function () {
                     Route::get('/getpass-download/{getPassId}', [GetPassController::class, 'downloadPdf']) ->name('getpass.download');
                     Route::post('/get-pass/store', [GetPassController::class, 'store'])->name('getpass.store');
 
-                    Route::post('/productLifeCycle', [InventoryController::class, 'productLifeCycle'])->name('productLifeCycle');
+                    // Route::post('/productLifeCycle', [InventoryController::class, 'productLifeCycle'])->name('productLifeCycle');
+                    Route::post('/productLifeCycle', [ProductLifeCycleController::class, 'productLifeCycle'])->name('productLifeCycle');
                     // Product Routes
                     Route::get('/search-products', [InventoryVendorProductController::class, 'search'])->name('product.search');
                     Route::post('/search-allproduct', [InventoryVendorProductController::class, 'searchAllProduct'])->name('search.allproduct');
@@ -397,6 +400,7 @@ Route::name('buyer.')->group(function () {
                         Route::post('/store', [ManualPOController::class, 'store'])->name('store');
                         Route::get('/searchVendorByVendorname', [ManualPOController::class, 'searchVendorByVendorname'])->name('search.vendors');
                         Route::get('/getVendorDetailsByName', [ManualPOController::class, 'getVendorDetailsByName'])->name('get.vendordetails');
+                        Route::post('/approveManualPO', [ManualPoController::class, 'approveManualPO'])->name('approveManualPO');
                     });
                     // Force Closure
                     Route::prefix('forceClosure')->name('forceClosure.')->group(function () {
@@ -414,7 +418,10 @@ Route::name('buyer.')->group(function () {
                         Route::post('/save-issue-to', [IssuedController::class, 'saveIssueTo'])->name('save');
                         Route::post('/delete-issue-to', [IssuedController::class, 'deleteIssueTo'])->name('delete');
                     });
-
+                    Route::prefix('grn_tolerance')->name('grntolerance.')->group(function () {
+                        Route::get('/get', [GrnToleranceController::class, 'get'])->name('get');
+                        Route::post('/save', [GrnToleranceController::class, 'save'])->name('save');
+                    });
                     //Issue
                     Route::prefix('issue')->name('issue.')->group(function () {
                         Route::post('/fetchInventoryDetails', [IssuedController::class, 'fetchInventoryDetails'])->name('fetchInventoryDetails');
@@ -471,7 +478,7 @@ Route::name('buyer.')->group(function () {
 
                         // Get Pass Report
                         Route::prefix('getPass')->group(function () {
-                            Route::get('listdata', [GetPassController::class,'gatePassReportlistdata'])->name('getPass.listdata');                    
+                            Route::get('listdata', [GetPassController::class,'gatePassReportlistdata'])->name('getPass.listdata');
                             Route::get('exportTotal',  [GetPassController::class,'exportTotalGetPassReport'])->name('getPass.exportTotal');
                             Route::get('exportBatch',  [GetPassController::class,'exportBatchGetPassReport'])->name('getPass.exportBatch');
                         });

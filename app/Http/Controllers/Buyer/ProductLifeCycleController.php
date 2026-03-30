@@ -206,23 +206,26 @@ class ProductLifeCycleController extends Controller
 
                         foreach ($rfq->orders as $order) {
                             foreach ($order->order_variants as $ov) {
-                                if ($ov->inventory_id == $RfqProductVariant->inventory_id || $ov->rfq_product_variant_id == $variantId) {                                   
+                                if ($ov->inventory_id == $RfqProductVariant->inventory_id || $ov->rfq_product_variant_id == $variantId) { 
+                                    if($order->order_status == '1'){
+                                        $currency = $order->vendor_currency ?? '₹';
+                                        $orders[] = [
+                                            'order_id'     => $order->id,
+                                            'order_no'     => $order->po_number,
+                                            'order_date'   => $order->created_at?->format('d/m/Y'),
+                                            'order_qty'    => NumberFormatterHelper::formatQty($ov->order_quantity, session('user_currency')['symbol'] ?? '₹'),
+                                            'rate'         => NumberFormatterHelper::formatCurrency($ov->order_price, $currency),
+                                            'vendor_name'  => $order->vendor->legal_name ?? 'N/A',
+                                            'basePoUrl'    => route('buyer.rfq.order-confirmed.view', ['id' => $order->id]),
+                                            'order_status' => $order->order_status == '1' ? 'Confirm' : 'Cancel',
+                                            'type'         => 'rfq',
+                                            'grn'          => $grnData[1][$order->id][$RfqProductVariant->inventory_id] ?? [],
+                                            'issue'        => $issueData[1][$order->id][$RfqProductVariant->inventory_id] ?? [],
+                                            'consume'      => $consumeData[1][$order->id][$RfqProductVariant->inventory_id]??[]
+                                        ];
+                                    }                                  
 
-                                    $currency = $order->vendor_currency ?? '₹';
-                                    $orders[] = [
-                                        'order_id'     => $order->id,
-                                        'order_no'     => $order->po_number,
-                                        'order_date'   => $order->created_at?->format('d/m/Y'),
-                                        'order_qty'    => NumberFormatterHelper::formatQty($ov->order_quantity, session('user_currency')['symbol'] ?? '₹'),
-                                        'rate'         => NumberFormatterHelper::formatCurrency($ov->order_price, $currency),
-                                        'vendor_name'  => $order->vendor->legal_name ?? 'N/A',
-                                        'basePoUrl'    => route('buyer.rfq.order-confirmed.view', ['id' => $order->id]),
-                                        'order_status' => $order->order_status == '1' ? 'Confirm' : 'Cancel',
-                                        'type'         => 'rfq',
-                                        'grn'          => $grnData[1][$order->id][$RfqProductVariant->inventory_id] ?? [],
-                                        'issue'        => $issueData[1][$order->id][$RfqProductVariant->inventory_id] ?? [],
-                                        'consume'      => $consumeData[1][$order->id][$RfqProductVariant->inventory_id]??[]
-                                    ];
+                                    
                                 }
                             }
                         }
@@ -237,10 +240,14 @@ class ProductLifeCycleController extends Controller
                         ];
                     
                 }),
-                'manualPo' => $inventory->manualOrderProductForPLC->map(function ($product)use($grnData,$issueData,$consumeData) {
+                'manualPo' => $inventory->manualOrderProductForPLC
+                        ->filter(function ($product) {
+                            $order = $product->manualOrder;
+                            return $order->order_status == '1' && $order->is_approve == '1';
+                        })->map(function ($product)use($grnData,$issueData,$consumeData) {
                                 $order = $product->manualOrder;
                                 $currency = $order->currencyDetails?->currency_symbol ?? '₹';
-
+                        
                                 return [
                                     'order_id'     => $order->id,
                                     'inventory_id'     => $product->inventory_id,
@@ -266,9 +273,133 @@ class ProductLifeCycleController extends Controller
             ];
         });
 
+        // $json = '{
+        //     "status": true,
+        //     "data": [
+        //         {
+        //             "inventory_id": 47274,
+        //             "product_name": "SHAPING MACHINE",
+        //             "specification": "3003",
+        //             "size": "",
+        //             "indent": [
+        //                 {
+        //                     "indent_number": 195,
+        //                     "indent_qty": "100",
+        //                     "status": "Approved",
+        //                     "added_date": "30/03/2026"
+        //                 },
+        //                 {
+        //                     "indent_number": 196,
+        //                     "indent_qty": "200",
+        //                     "status": "Approved",
+        //                     "added_date": "30/03/2026"
+        //                 }
+        //             ],
+        //             "rfq": [
+        //                 {
+        //                     "rfq_no": "OPPO-26-00105",
+        //                     "rfq_date": "30/03/2026",
+        //                     "rfq_closed": "Closed",
+        //                     "rfq_qty": "30",
+        //                     "rfq_id": "OPPO-26-00105",
+        //                     "orders": [
+        //                         {
+        //                             "order_id": 2559,
+        //                             "order_no": "O-OPPO-26-00105/02",
+        //                             "order_date": "30/03/2026",
+        //                             "order_qty": "3",
+        //                             "rate": "₹ 10.00",
+        //                             "vendor_name": "PINGKI",
+        //                             "basePoUrl": "https://v82.guruworkwithit.online/buyer/rfq/order-confirmed/view/2559",
+        //                             "order_status": "Confirm",
+        //                             "type": "rfq",
+        //                             "grn": [],
+        //                             "issue": [],
+        //                             "consume": []
+        //                         },
+        //                         {
+        //                             "order_id": 2557,
+        //                             "order_no": "O-OPPO-26-00105/01",
+        //                             "order_date": "30/03/2026",
+        //                             "order_qty": "3",
+        //                             "rate": "₹ 10.00",
+        //                             "vendor_name": "PINGKI",
+        //                             "basePoUrl": "https://v82.guruworkwithit.online/buyer/rfq/order-confirmed/view/2557",
+        //                             "order_status": "Cancel",
+        //                             "type": "rfq",
+        //                             "grn": [],
+        //                             "issue": [],
+        //                             "consume": []
+        //                         }
+        //                     ]
+        //                 },
+        //                 {
+        //                     "rfq_no": "OPPO-26-00106",
+        //                     "rfq_date": "30/03/2026",
+        //                     "rfq_closed": "",
+        //                     "rfq_qty": "70",
+        //                     "rfq_id": "OPPO-26-00106",
+        //                     "orders": [
+        //                         {
+        //                             "order_id": 2554,
+        //                             "order_no": "O-OPPO-26-00106/01",
+        //                             "order_date": "30/03/2026",
+        //                             "order_qty": "3.366",
+        //                             "rate": "₹ 15.00",
+        //                             "vendor_name": "PINGKI",
+        //                             "basePoUrl": "https://v82.guruworkwithit.online/buyer/rfq/order-confirmed/view/2554",
+        //                             "order_status": "Confirm",
+        //                             "type": "rfq",
+        //                             "grn": [],
+        //                             "issue": [],
+        //                             "consume": []
+        //                         },
+        //                         {
+        //                             "order_id": 2555,
+        //                             "order_no": "O-OPPO-26-00106/02",
+        //                             "order_date": "30/03/2026",
+        //                             "order_qty": "7",
+        //                             "rate": "₹ 15.00",
+        //                             "vendor_name": "PINGKI",
+        //                             "basePoUrl": "https://v82.guruworkwithit.online/buyer/rfq/order-confirmed/view/2555",
+        //                             "order_status": "Confirm",
+        //                             "type": "rfq",
+        //                             "grn": [],
+        //                             "issue": [],
+        //                             "consume": []
+        //                         }
+        //                     ]
+        //                 }
+        //             ],
+        //             "manualPo": [
+        //                 {
+        //                     "order_id": 461,
+        //                     "inventory_id": 47274,
+        //                     "order_no": "MO-OPPO-26-027",
+        //                     "order_date": "30/03/2026",
+        //                     "order_qty": "580",
+        //                     "rate": "₹ 15.00",
+        //                     "vendor_name": "PINGKI VENDOR",
+        //                     "basePoUrl": "https://v82.guruworkwithit.online/buyer/inventory/reports/manualpo/orderDetails/461",
+        //                     "type": "manual",
+        //                     "order_status": "Confirm",
+        //                     "grn": [],
+        //                     "issue": [],
+        //                     "consume": []
+        //                 }
+        //             ]
+        //         }
+        //     ]
+        // }';
+
+        // return response()->json(json_decode($json, true));
+
+
         return response()->json([
             'status' => true,
             'data'   => $finalData
         ]);
+
+        
     }
 }

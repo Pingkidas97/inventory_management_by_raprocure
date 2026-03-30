@@ -54,7 +54,7 @@ function grnPopUP(inventoryId) {
                     if (orderGrnTable) {
                         orderGrnTable.style.display = 'block';
                     }
-                    createOrderGrnTable(data.order_details);
+                    createOrderGrnTable(data.order_details, data.grn_tolerance);
                 }else{
                     const orderGrnTable = document.getElementById('orderGrnTable');
                     if (orderGrnTable) {
@@ -130,11 +130,11 @@ function initializeDatepickerForBillDates() {
         });
     });
 }
-function createOrderGrnTable(order_details){
+function createOrderGrnTable(order_details, grn_tolerance){
     var tbody = $('#grnaddModal #orderGrnTable tbody');
     tbody.empty();
     order_details.forEach(function(order) {
-        var maxGrnQty = parseFloat(((parseFloat(order.order_quantity || 0) * 1.02) - parseFloat(order.grn_entered || 0)).toFixed(3));
+        var maxGrnQty = parseFloat(((parseFloat(order.order_quantity || 0) * grn_tolerance) - parseFloat(order.grn_entered || 0)).toFixed(3));
         const url = order.baseManualPoUrl.replace('__ID__', order.id);
         var row = `<tr>
             <td class="text-center">

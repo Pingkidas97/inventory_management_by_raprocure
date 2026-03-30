@@ -323,10 +323,11 @@ function show_add_grn_modal() {
     .then(response => response.json())
     .then(data => {
         let tbody = document.querySelector('#pendingGrngrnaddModal tbody');
+        let tolerance = data.grnTolerance || 1.02;
         tbody.innerHTML = '';
-
-        data.forEach(item => {
-            var maxGrnQty = parseFloat(((parseFloat(item.order_quantity || 0) * 1.02) - parseFloat(item.grn_entered || 0)).toFixed(3));
+        console.log(data.grnTolerance);
+        data.orders.forEach(item => {
+            var maxGrnQty = parseFloat(((parseFloat(item.order_quantity || 0) * tolerance) - parseFloat(item.grn_entered || 0)).toFixed(3));
             const url = item.baseManualPoUrl.replace('__ID__', item.id);
             let row = `
                 <tr>

@@ -242,6 +242,11 @@
                                         <span class="bi bi-plus-square" aria-hidden="true"></span> Force Closure
                                     </button>
                                 </li>
+                                <li class="dropdown-item-custom">
+                                    <button type="button" class="ra-btn ra-btn-white font-size-13 w-100" id="addGRNTolerance" onclick="show_grn_tolerance_modal()">
+                                        <span class="bi bi-plus-square" aria-hidden="true"></span> Add GRN Tolerance
+                                    </button>
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -399,7 +404,6 @@
         </div>
     </div>
     <!--main-->
-
     @include('buyer.inventory.modal')
     @include('buyer.inventory.grnaddmodal')
     @include('buyer.indent.modal')
@@ -413,6 +417,7 @@
     @include('buyer.inventory.manualPOModal')
     @include('buyer.inventory.workOrderModal')
     @include('buyer.inventory.forceClosureModal')
+    @include('buyer.inventory.addGRNToleranceModal')
     @include('buyer.inventory.getPassModal')
     @include('buyer.inventory.productLifeCycleModal')
 
@@ -436,6 +441,7 @@
             <script src="{{ asset('public/js/getPass.js') }}"></script>
             <script src="{{ asset('public/js/workOrder.js') }}"></script>
             <script src="{{ asset('public/js/forceClosure.js') }}"></script>
+            <script src="{{ asset('public/js/addGRNTolerance.js') }}"></script>
         @endonce
 
         <script>
@@ -467,6 +473,8 @@
             const genarateWorkOrderURL = "{{ route('buyer.workOrder.store') }}";
             const genarateforceClosureURL = "{{ route('buyer.forceClosure.store') }}";
             const workorderusercurrency = "{{ route('buyer.workOrder.userCurrency') }}";
+            const gegrntoleranceUrl = "{{ route('buyer.grntolerance.get') }}";
+            const savegrntoleranceUrl = "{{ route('buyer.grntolerance.save') }}";
         </script>
 
         <script>
@@ -492,7 +500,7 @@
                     }
                 });
             });
-
+            
             function inventory_list_data() {
                 if (!$.fn.DataTable.isDataTable('#inventory-table')) {
                     inventoryTable = $('#inventory-table').DataTable({
@@ -798,6 +806,8 @@
                 $('#columnContextMenu').hide();
             });
 
+
+            
         </script>
         <!-- hide coloumn -->
     @endpush

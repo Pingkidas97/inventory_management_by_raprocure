@@ -277,7 +277,7 @@ function fetchPendingOrdersForInventory(inventory_id) {
                     });
                 }
 
-                //  সব order collect
+                // All order collect
                 let allOrders = [];
                 response.data.forEach(item => {
                     if (item.pending_orders && item.pending_orders.length > 0) {
@@ -350,13 +350,14 @@ function fetchPendingOrdersForInventory(inventory_id) {
 }
 
   function renderInventoryTable(data) {
+      console.log
       let tbodyHtml = '';
       data.forEach(function (item) {
           if (item.pending_orders && item.pending_orders.length > 0) {
               item.pending_orders.forEach(function (order) {
                   let maxGrnQty = parseFloat(((parseFloat(order.order_quantity || 0) * 1.02) - parseFloat(order.grn_entered || 0)).toFixed(3));
                   const url = order.baseManualPoUrl.replace('__ID__', order.id);
-
+                  if(maxGrnQty > 0){
                   tbodyHtml += `
                   <tr>                    
                     <td class="text-center">${order.order_number || ''}</td>
@@ -368,7 +369,7 @@ function fetchPendingOrdersForInventory(inventory_id) {
                     <td class="text-center">${order.show_order_quantity || ''}</td>
                     <td class="text-center">${order.vendor_name || ''}</td>
                     <td class="text-center">
-                       <input type="text" id="grn_qty" class="grn_quantity_input form-control bg-white text-center w-100" name="grn_qty[]" data-max="${maxGrnQty}" maxlength="20" min="0" step="any" style="width: 200px;">
+                       <input type="text" class="grn_quantity_input form-control bg-white text-center w-100" name="grn_qty[]" data-max="${maxGrnQty}" maxlength="20" min="0" step="any" style="width: 200px;">
                         <input type="hidden" name="rate[]" class="rate" value="${order.rate || ''}">
                         <input type="hidden" name="inventory_id[]" class="inventory_id" value="${order.inventory_id || ''}">
                         <input type="hidden" name="order_id[]" class="order_id" value="${order.id || ''}">
@@ -385,6 +386,7 @@ function fetchPendingOrdersForInventory(inventory_id) {
                     </td>
                     
                   </tr>`;
+                  }
               });
           }
       });
@@ -548,7 +550,10 @@ $('#getPassForm').off('submit').on('submit', function (e) {
         toastr.error('Please select inventory product');
         return;
     }
+    let qtyError = false;
 
+    
+    
     isSaveGetPassSubmitting = true;
 
     let $button = $('#saveGetPassBtn');

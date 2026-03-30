@@ -11,6 +11,9 @@ use Carbon\Carbon;
 
 use App\Models\{Tax, User, Vendor, ManualOrder, Inventories, ManualOrderProduct, Grn, Currency};
 use App\Helpers\{NumberFormatterHelper, TruncateWithTooltipHelper};
+
+use App\Traits\HasModulePermission;
+
 use App\Http\Controllers\Buyer\InventoryController;
 
 use App\Exports\ManualPoReportExport;
@@ -29,6 +32,7 @@ use App\Helpers\EmailHelper;
 class ManualPOController extends Controller
 {
     use TrimFields;
+    use HasModulePermission;
     public function __construct(protected ExportService $exportService) {}
     public static function userCurrency(): void
     {
@@ -263,14 +267,14 @@ class ManualPOController extends Controller
                 'buyer_id'               => $userId,
                 'currency_id'            => $request->currency_id,
                 'buyer_user_id'          => Auth::user()->id,
-                'order_status'           => '1',
+                'order_status'           => '2',
                 'order_price_basis'      => $request->priceBasis,
                 'order_payment_term'     => $request->paymentTerms,
                 'order_delivery_period'  => $request->deliveryPeriod,
                 'order_remarks'          => $request->remarks,
                 'order_add_remarks'      => $request->additionalRemarks,
                 'prepared_by'            => Auth::user()->id,
-                'approved_by'            => Auth::user()->id,
+                'is_approve'            =>  '2',
                 'created_at'             => $mo_created_date,
             ]);
 
@@ -314,15 +318,15 @@ class ManualPOController extends Controller
 
             DB::commit();
             //start send mail
-            $this->sendEmail($manualPoNumber, $request, $mo_created_date);//pingki
+            /*$this->sendEmail($manualPoNumber, $request, $mo_created_date);//pingki*/
             //end send mail
             //start notification
-            $notification_data = array();
+            /*$notification_data = array();
             $notification_data['po_number'] = $manualPoNumber;
             $notification_data['message_type'] = 'Direct Order Confirmed';
             $notification_data['notification_link'] = route('vendor.direct_order.show', $manualOrder->id);
             $notification_data['to_user_id'] = $request->vendor_user_id;
-            sendNotifications($notification_data);
+            sendNotifications($notification_data);*/
             //end notification
             return response()->json([
                 'status' => '1',
@@ -337,6 +341,47 @@ class ManualPOController extends Controller
             ]);
         }
     }
+    public function approveManualPO(Request $request){
+        if (Auth::user()->parent_id != 0) {
+            $this->ensurePermission('TO_CONFIRM_ORDER', 'add', '1');
+        }
+        
+        $request->validate([
+            'id' => ['required', 'exists:manual_orders,id'],
+        ]);
+       
+        $manualOrder = ManualOrder::with('order_products')->find($request->id);
+        
+        if (!$manualOrder) {
+            return response()->json(['status' => '2', 'message' => 'Manual Order not found.'], 404);
+        }
+        if ($manualOrder->is_approve == 1) {
+            return response()->json(['status' => '2', 'message' => 'Manual Order is already approved.'], 400);
+        }
+
+        try {
+            $manualOrder->is_approve = 1;
+            $manualOrder->order_status = 1;
+            $manualOrder->approved_by = Auth::user()->id;
+            $manualOrder->save();
+            $manualPoNumber = $manualOrder->manual_po_number;
+            $mo_created_date =  $manualOrder->created_at;    
+            if($request->send_mail == 1){
+                $this->sendEmail($manualPoNumber, $manualOrder, $mo_created_date);
+            }
+            $notification_data = array();
+            $notification_data['po_number'] = $manualPoNumber;
+            $notification_data['message_type'] = 'Direct Order Confirmed';
+            $notification_data['notification_link'] = route('vendor.direct_order.show', $manualOrder->id);
+            $notification_data['to_user_id'] = $manualOrder->vendor_id;
+            sendNotifications($notification_data);
+
+            return response()->json(['status' => '1', 'message' => 'Manual Order approved successfully.']);
+        } catch (Exception $e) {
+            return response()->json(['status' => '2', 'message' => 'Failed to approve Manual Order. ' . $e->getMessage()], 500);
+        }
+    }
+
     public function sendEmail_withBlade($manualPoNumber, $request)//pingki
     {
         $vendor = Vendor::where('user_id', $request->vendor_user_id)
@@ -387,27 +432,31 @@ class ManualPOController extends Controller
         // return 'Email sent!';
     }
 
-    private function sendEmail($manualPoNumber,  $request, $mo_created_date)
+    private function sendEmail($manualPoNumber,  $manualOrder, $mo_created_date)
     {
         $order = ManualOrder::where('manual_po_number', $manualPoNumber)
                 ->where('buyer_user_id', Auth::user()->id)
                 ->first();
-
+        
         if (!$order) {
             return;
         }
-        $mo_created_date = Carbon::createFromFormat('Y-m-d', $mo_created_date)->format('d/m/Y');
-        $vendor_data = Vendor::where('user_id', $request->vendor_user_id)
+        
+        
+        $mo_created_date = Carbon::parse($order->created_at)->format('d/m/Y');
+        
+        $vendor_data = Vendor::where('user_id', $manualOrder->vendor_id)
             ->with(['user', 'vendor_country', 'vendor_state', 'vendor_city'])
             ->first();
-
+        
         $subject = "Direct Order Confirmed (Order No. " . $order->manual_po_number . " )";
 
         $mail_data = vendorEmailTemplet('order-confirmation-email');
+        
         $admin_msg = $mail_data->mail_message;
 
-        $product_data = $this->getPOVariantHTMLForMail($request,$order->manual_po_number, get_currency_str(session('user_currency')['symbol'] ?? '₹'));
-
+        $product_data = $this->getPOVariantHTMLForMail($manualOrder,$order->manual_po_number, get_currency_str(session('user_currency')['symbol'] ?? '₹'));
+       
         $admin_msg = str_replace('$rfq_date_formate', $mo_created_date, $admin_msg);
         // $admin_msg = str_replace('$rfq_date_formate', '', $admin_msg);
         $admin_msg = str_replace('$rfq_number', '', $admin_msg);
@@ -420,51 +469,48 @@ class ManualPOController extends Controller
         $admin_msg = str_replace('$order_id', $order->manual_po_number, $admin_msg);
         $admin_msg = str_replace('$order_date', $mo_created_date, $admin_msg);
         $admin_msg = str_replace('$website_url', route("login"), $admin_msg);
-
+        
         EmailHelper::sendMail($vendor_data['user']['email'], $subject, $admin_msg);
     }
 
-    private function getPOVariantHTMLForMail($request,$po_number, $currency_symbol){
-
+    private function getPOVariantHTMLForMail($manualOrder, $po_number, $currency_symbol)
+    {
         $mail_html = '';
         $total_price = 0;
-        // if(!empty($po_variants)){
-        if(!empty($request->qty)){
-            // foreach ($po_variants as $key => $value) {
-            foreach ($request->qty as $index => $quantity) {
-                $rate = $request->rate[$index];
-                $inventory = Inventories::with(['product', 'uom'])->findOrFail($request->inventory_id[$index]);
 
-                $productName = $inventory->product->product_name;
-                $uomName = $inventory->uom->uom_name;
-                $sub_total_price = $quantity * $rate ;
+        foreach ($manualOrder->order_products as $product) {
 
-                $total_price += $sub_total_price;
-                $sub_total_price = number_format((float)$sub_total_price, 2, '.', '');
+            $inventory = Inventories::with(['product', 'uom'])
+                ->find($product->inventory_id);
 
-                $mail_html.= '<tr class="td_class">
-                                <td class="td_class">
-                                  ' . $productName . '
-                                </td>
-                                <td class="td_class" style="text-align: center;">
-                                  ' . NumberFormatterHelper::formatQty($quantity,session('user_currency')['symbol'] ?? '₹') . '
-                                </td>
-                                <td class="td_class" style="text-align: center;">
-                                  '. $uomName .'
-                                </td>
-                                <td class="td_class" style="text-align: center;">
-                                ' . $currency_symbol .' '. NumberFormatterHelper::formatQty($sub_total_price,session('user_currency')['symbol'] ?? '₹')/*IND_money_format($sub_total_price)*/ . '
-                                </td>
-                            </tr>';
-            }
-            // $po_total_amout = number_format((float)$total_price, 2, '.', '');
-            $mail_html.='<tr>
-                            <td colspan="3" class="td_class">Total</td>
-                            <td class="td_class" style="text-align: center;">
-                            ' . $currency_symbol .' '.  NumberFormatterHelper::formatQty($sub_total_price,session('user_currency')['symbol'] ?? '₹') /*IND_money_format($po_total_amout)*/ . '
-                            </td>
-                        </tr>';
+            $productName = $inventory->product->product_name ?? '';
+            $uomName = $inventory->uom->uom_name ?? '';
+
+            $quantity = $product->product_quantity;
+            $rate = $product->product_price;
+
+            $sub_total_price = $quantity * $rate;
+            $total_price += $sub_total_price;
+
+            $mail_html .= '
+                <tr class="td_class">
+                    <td class="td_class">'.$productName.'</td>
+                    <td class="td_class" style="text-align:center;">'.$quantity.'</td>
+                    <td class="td_class" style="text-align:center;">'.$uomName.'</td>
+                    <td class="td_class" style="text-align:center;">
+                        '.$currency_symbol.' '.number_format($sub_total_price,2).'
+                    </td>
+                </tr>';
         }
+
+        $mail_html .= '
+            <tr>
+                <td colspan="3" class="td_class">Total</td>
+                <td class="td_class" style="text-align:center;">
+                    '.$currency_symbol.' '.number_format($total_price,2).'
+                </td>
+            </tr>';
+
         return $mail_html;
     }
     //-------------- --------------MANUAL PO REPORT---------- ---------------------
@@ -477,6 +523,7 @@ class ManualPOController extends Controller
         $page = intval(($request->start ?? 0) / $perPage) + 1;
         $paginated = $query->Paginate($perPage, ['*'], 'page', $page);
         $inventories = $paginated->items();
+       
         $data = [];
         foreach ($inventories as $row) {
             $filteredProducts = $row->products;
@@ -489,13 +536,16 @@ class ManualPOController extends Controller
             $currency_symbol = $row->currencyDetails?->currency_symbol ?? (session('user_currency')['symbol'] ?? '₹');
             $totalAmount = $filteredProducts->sum('product_total_amount');
             $data[] = [
+                'id' => $row->id, // REQUIRED for toggle
                 'manual_po_number' => '<a href="' . route('buyer.report.manualPO.orderDetails', $row->id) . '">' . $row->manual_po_number . '</a>',
                 'order_date' => $row->created_at ? Carbon::parse($row->created_at)->format('d/m/Y') : '',
                 'product_names' => TruncateWithTooltipHelper::wrapText($this->formatProductName($row, $request->search_product_name, $request->search_category_id)),
                 'vendor_name' => optional($row->vendor)->legal_name ?? '',
                 'prepared_by' => optional($row->preparedBy)->name ?? '',
                 'total_amount' => NumberFormatterHelper::formatCurrency($totalAmount,$currency_symbol),
-                'status' =>$row->order_status == 1 ? 'Confirmed' : 'Cancelled',
+                'is_action' => false,
+                'is_approved' => (int) $row->is_approve,
+                'status' =>$row->order_status == 1 ? 'Confirmed' : 'Waiting for Confirmation',                
             ];
         }
 
@@ -545,6 +595,7 @@ class ManualPOController extends Controller
         $query = $this->getFilteredQuery($request);
 
         $results = $query->offset($offset)->limit($limit)->get();
+        dd($results);
         $result = [];
         $totalAmount = 0;
         foreach ($results as $index => $row) {

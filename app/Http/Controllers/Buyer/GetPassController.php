@@ -69,7 +69,8 @@ class GetPassController extends Controller
                             $maxGrnQty = GetPass::where('inventory_id', $inventoryId)
                                 ->where('company_id', $buyerId)
                                 ->where('order_id', $order->id)
-                                ->sum('grn_qty');                           
+                                ->sum('grn_qty');       
+                                                   
                             $grn_buyer_rate=GetPass::where('inventory_id', $inventoryId)
                                         ->where('company_id', $buyerId)
                                         ->where('order_id', $order->id)
@@ -290,7 +291,7 @@ class GetPassController extends Controller
 
         $filePath = $folderPath . "/GatePass_$getPassId.pdf";
 
-        if (file_exists($filePath)) {
+        if (!file_exists($filePath)) {
             $orders = GetPass::with(['inventory.branch'])->where('get_pass_id', $getPassId)->get();
              
             $pdf = Pdf::loadView('buyer.inventory.downloadGatePass', compact('orders'))
@@ -327,7 +328,7 @@ class GetPassController extends Controller
         $validData = [];
 
         $fields = ['invoice_number', 'bill_date', 'transporter_name', 'vehicle_lr_number', 'gross_weight', 'freight_charges', 'approved_by'];
-
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
         $length = count($request->grn_qty);
 
         foreach ($fields as $field) {
@@ -354,7 +355,7 @@ class GetPassController extends Controller
             $grnQty = number_format(floatval($qty), 3, '.', '');
             $orderQty = number_format(floatval($request->order_qty[$index] ?? 0), 3, '.', '');
             $enteredQty = number_format(floatval($request->grn_entered[$index] ?? 0), 3, '.', '');
-            $remainingQty = number_format(($orderQty * 1.02) - $enteredQty, 3, '.', '');
+            $remainingQty = number_format(($orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId)) - $enteredQty, 3, '.', '');
             $orderId = $request->order_id[$index];
             $grnType = $request->grn_type[$index];
            
@@ -430,6 +431,8 @@ class GetPassController extends Controller
     }
     protected function checkMaxQtyForRfqGrn($grnQtys, $inventoryId, $orderId)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+
         $grnQtys = collect($grnQtys);
         $grns = GetPass::where('inventory_id', $inventoryId)
             ->where('order_id', $orderId)
@@ -456,7 +459,7 @@ class GetPassController extends Controller
             ->where('rfq_product_variant_id', $RfqProductVariantId)
             ->value('order_quantity') ?? 0;
 
-        $maxOrderQty = $orderQty * 1.02;
+        $maxOrderQty = $orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
         $maxGrnQty =  round($maxOrderQty - $totalGrnEntered, 3);
         $exceedsMaxQty = $grnQtys->filter(function($qty) use ($maxGrnQty) {
             return floatval($qty) > floatval($maxGrnQty);
@@ -470,6 +473,7 @@ class GetPassController extends Controller
     }
     public function checkMaxQtyForManualOrderGrn($grnQtys, $inventoryId, $orderId)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
         $grnQtys = collect($grnQtys);
         $grns = GetPass::where('inventory_id', $inventoryId)
         ->where('order_id', $orderId)
@@ -486,7 +490,7 @@ class GetPassController extends Controller
         ->first();
 
         $orderQty = $manualOrderProduct?->product_quantity ?? 0;
-        $maxOrderQty = $orderQty * 1.02 ;
+        $maxOrderQty = $orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
         $maxGrnQty =  round($maxOrderQty - $totalGrnEntered, 3);
         $exceedsMaxQty = $grnQtys->filter(function($qty) use ($maxGrnQty) {
             return floatval($qty) > floatval($maxGrnQty);
@@ -510,28 +514,58 @@ class GetPassController extends Controller
         $getPasses = collect($paginated->items());
 
         $data = $getPasses->map(function ($getPass) {
-            $currencySymbol = session('user_currency')['symbol'] ?? '₹';
-            return [
-                'get_pass_no' => $getPass->get_pass_no,
-                'get_pass_id' => '<a href="'.route('buyer.getpass.download', $getPass->get_pass_id).'" 
-                    class="text-primary" target="_blank" style="color:#000 !important;">
-                    '.$getPass->get_pass_id.'
-                  </a>',
-                'product' => optional($getPass->inventory->product)->product_name ?? optional($getPass->inventory)->buyer_product_name,
-                'buyer_product_name' => optional($getPass->inventory)->buyer_product_name ?? '',
-                'specification' => TruncateWithTooltipHelper::wrapTextSS(cleanInvisibleCharacters($getPass->inventory->specification)),
-                'size' => TruncateWithTooltipHelper::wrapTextSS(cleanInvisibleCharacters($getPass->inventory->size)),
-                'inventory_grouping' => TruncateWithTooltipHelper::wrapText($getPass->inventory->inventory_grouping),
-                'vendor_name' => TruncateWithTooltipHelper::wrapText($getPass->vendor_name??''),
-                'vendor_invoice_no' => TruncateWithTooltipHelper::wrapText($getPass->vendor_invoice_number),
-                'vehicle_no_lr_no' => TruncateWithTooltipHelper::wrapText($getPass->vehicle_no_lr_no),
-                'gross_wt' => TruncateWithTooltipHelper::wrapText($getPass->gross_wt),
-                'added_date' => $getPass->updated_at ? Carbon::parse($getPass->updated_at)->format('d/m/Y') : '',
-                'grn_qty' =>'<span class="grn-entry-details" style="cursor:pointer;color:blue;" data-id="'.$getPass->id.'" >'.NumberFormatterHelper::formatQty($getPass->grn_qty,$currencySymbol) .'</span>',
-                'uom' => $getPass->inventory->uom->uom_name ?? '',
-            ];
-        });
 
+    $currencySymbol = session('user_currency')['symbol'] ?? '₹';
+    $getPassId = $getPass->get_pass_id;
+
+    return [
+            'get_pass_no' => $getPass->get_pass_no,
+
+            'get_pass_id' => !empty($getPassId)
+                ? sprintf(
+                    '<a href="%s" class="text-primary" target="_blank" style="color:#000 !important;">%s</a>',
+                    route('buyer.getpass.download', $getPassId),
+                    $getPassId
+                )
+                : '-',
+
+            'product' => optional(optional($getPass->inventory)->product)->product_name 
+                            ?? optional($getPass->inventory)->buyer_product_name 
+                            ?? '',
+
+            'buyer_product_name' => optional($getPass->inventory)->buyer_product_name ?? '',
+
+            'specification' => TruncateWithTooltipHelper::wrapTextSS(
+                cleanInvisibleCharacters(optional($getPass->inventory)->specification)
+            ),
+
+            'size' => TruncateWithTooltipHelper::wrapTextSS(
+                cleanInvisibleCharacters(optional($getPass->inventory)->size)
+            ),
+
+            'inventory_grouping' => TruncateWithTooltipHelper::wrapText(
+                optional($getPass->inventory)->inventory_grouping
+            ),
+
+            'vendor_name' => TruncateWithTooltipHelper::wrapText($getPass->vendor_name ?? ''),
+
+            'vendor_invoice_no' => TruncateWithTooltipHelper::wrapText($getPass->vendor_invoice_number),
+
+            'vehicle_no_lr_no' => TruncateWithTooltipHelper::wrapText($getPass->vehicle_no_lr_no),
+
+            'gross_wt' => TruncateWithTooltipHelper::wrapText($getPass->gross_wt),
+
+            'added_date' => $getPass->updated_at 
+                ? Carbon::parse($getPass->updated_at)->format('d/m/Y') 
+                : '',
+
+            'grn_qty' => '<span class="grn-entry-details" style="cursor:pointer;color:blue;" data-id="'.$getPass->id.'">'
+                            . NumberFormatterHelper::formatQty($getPass->grn_qty, $currencySymbol) 
+                        . '</span>',
+
+            'uom' => optional(optional($getPass->inventory)->uom)->uom_name ?? '',
+        ];
+    });
         return response()->json([
             'draw' => intval($request->draw),
             'recordsTotal' => $paginated->total(),

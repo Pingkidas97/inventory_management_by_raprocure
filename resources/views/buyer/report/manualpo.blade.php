@@ -25,6 +25,43 @@
     .dataTables_scrollBody::-webkit-scrollbar-thumb:hover {
         background-color: #043e6c;
     }
+    .switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 20px;
+    }
+
+    .switch input { display: none; }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        background-color: #ff6241;
+        border-radius: 20px;
+        top: 0; left: 0; right: 0; bottom: 0;
+        transition: .3s;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 14px;
+        width: 14px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        border-radius: 50%;
+        transition: .3s;
+    }
+
+    input:checked + .slider {
+        background-color: #015294;
+    }
+
+    input:checked + .slider:before {
+    transform: translateX(18px);
+    }
     </style>
 @endpush
 @push('headJs')
@@ -210,12 +247,37 @@
                             <th class="text-center border-bottom-dark text-wrap keep-word align-bottom">Vendor Name</th>
                             <th class="text-center border-bottom-dark text-wrap keep-word align-bottom">Added BY</th>
                             <th class="text-center border-bottom-dark text-wrap keep-word align-bottom">Order Value</th>
+                            <th class="text-center border-bottom-dark text-wrap keep-word align-bottom">Is Approved</th>
                             <th class="text-center border-bottom-dark text-wrap keep-word align-bottom">Status</th>
                         </tr>
                     </thead>
                 </table>
             </div>
             <!-- End Datatable -->
+        </div>
+    </div>
+    <div class="modal fade" id="approveModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Approval</h5>
+            </div>
+
+            <div class="modal-body text-center">
+                <p>Do you want to send mail to vendor?</p>
+            </div>
+
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-danger" id="approveNo">
+                No
+                </button>
+                <button type="button" class="btn btn-success" id="approveYes">
+                Yes
+                </button>
+            </div>
+
+            </div>
         </div>
     </div>
     <!--main-->
@@ -259,6 +321,7 @@
                                 d.search_order_no     = $('#search_order_no').val();
                                 d.search_vendor_name  = $('#search_vendor_name').val();
                                 d.search_category_id  = $('#search_category_id').val();
+                                d.is_approved         = $('#is_approved').val();
                                 d.order_status        = $('#order_status').val();
                             },
                         },
@@ -276,6 +339,18 @@
                                 { data:'vendor_name', name:'vendor_name' },
                                 { data:'prepared_by', name:'prepared_by' },
                                 { data:'total_amount', name:'total_amount' },
+                                { data: 'is_approved',
+                                    render: function (data, type, row) {
+                                        let checked = data == 1 ? 'checked' : '';
+                                        let disabled = data == 1 ? 'disabled' : '';
+                                        return `
+                                            <label class="switch">
+                                                <input type="checkbox" class="toggle-approve" data-id="${row.id}" ${checked} ${disabled}>
+                                                <span class="slider round"></span>
+                                            </label>
+                                        `;
+                                    } 
+                                },
                                 { data:'status', name:'status' },
                             ],
                             columnDefs: [
@@ -400,7 +475,44 @@
                         .prop('disabled', false);
                     $('button').prop('disabled', false);
                 }
+                let selectedId = null;
 
+                $(document).on('change', '.toggle-approve', function () {
+                    let id = $(this).data('id');
+
+                    selectedId = id;
+
+                    $('#approveModal').modal('show');
+                });
+                $('#approveYes').on('click', function () {
+                    approvePO(1); // send mail
+                });
+                $('#approveNo').on('click', function () {
+                    approvePO(0); // no mail
+                });
+                function approvePO(sendMail) {
+                    $.ajax({
+                        url: "{{ route('buyer.manualPO.approveManualPO') }}",
+                        type: "POST",
+                        data: {
+                            _token: $('meta[name="csrf-token"]').attr("content"),
+                            id: selectedId,
+                            is_approved: 1,
+                            send_mail: sendMail
+                        },
+                        success: function (res) {
+                            toastr.success("Approved successfully");
+
+                            $('#approveModal').modal('hide');
+                            $('#report-table').DataTable().ajax.reload(null, false);
+                        },
+                        error: function (err) {
+                            toastr.error(err.responseJSON?.message || "Error");
+
+                            $('.toggle-approve[data-id="'+selectedId+'"]').prop('checked', false);
+                        }
+                    });
+                }
             </script>
             <!-- Excel Export Script -->
         @endonce

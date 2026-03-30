@@ -71,11 +71,13 @@
             <th>Product</th>
             <th>Size</th>
             <th>Specification</th>
-            <th>Product Order Qty</th>
+            <th>Product <br> Order Qty</th>
             <th>GRN Qty</th>
-            <th>Rate</th>
+            <th>Rate</th>            
+            <th>GST%</th>
             <th>Amount</th>
-            <th>GST</th>
+            <th>GST Amount</th>
+            <th>Amount <br> include GST</th>
         </tr>
         
         @foreach($grn['order_details'] as $order)
@@ -90,20 +92,23 @@
                 <td class="right">{{ $order['product_order_qty'] ?? '-' }}</td>
                 <td class="right">{{ $order['grn_qty'] ?? '-' }}</td>
                 <td class="right nowrap">{{ isset($order['rate']) ? str_replace('रु', 'NPR', $order['rate']) : '-' }}</td>
+                <td class="right">{{ $order['gst'].'%' ?? '-' }}</td>
                 <td class="right nowrap">{{ isset($order['amount']) ? str_replace('रु', 'NPR', $order['amount']) : '-' }}</td>
-                <td class="right nowrap">{{ $order['gst_no'] ?? '-' }}</td>
+                <td class="right nowrap">{{ $order['gst_amount'] ?? '-' }}</td>
+                <td class="right nowrap">{{ $order['total_amount_gst'] ?? '-' }}</td>
             </tr>
         @endforeach
             <tr>
-                <td colspan = '9' class="right"> Total </td>
+                <td colspan = '10' class="right"> Total </td>
                 <td class="right nowrap">{{$grn['total_amount']}}</td>
-                <td class="right nowrap">{{$grn['total_gst']}}</td>
+                <td class="right nowrap">&nbsp;</td>
+                <td class="right nowrap">{{$grn['total_amount_incl_gst']}}</td>
             </tr>
     </table>
 
     <table style="margin-top:20px;">
         <tr>
-            <td colspan="11" class="right small-text">
+            <td colspan="15" class="right small-text">
                 GENERATED THROUGH 
                 @php
                     $path = public_path('assets/images/rfq-logo.png');
@@ -114,6 +119,17 @@
                 <img src="{{ $base64 }}" alt="raProcure" style="max-width: 15%; vertical-align: middle;">
             </td>
         </tr>
+        <tr>
+            <td colspan="5" class="small-text" height="100" style="text-align:center; vertical-align:bottom; border:none;">
+                (Inspection BY)
+            </td>
+            <td colspan="5" class="small-text" height="100" style="text-align:center; vertical-align:bottom; border:none;">
+                (Store Manager)
+            </td>
+            <td colspan="5" class="small-text" height="100" style="text-align:center; vertical-align:bottom; border:none;">
+                (Authorised By)
+            </td>
+        </tr>            
     </table>
 </body>
 </html>

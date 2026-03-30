@@ -135,7 +135,7 @@ function renderOrders(item) {
                         <tr><th>Order Date</th><th>Order Qty</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>${order.order_date ?? '-'}</td><td><strong>${order.order_qty ?? '-'}</strong>  [ ${order.order_status} ]</td></tr>
+                        <tr><td>${order.order_date ?? '-'}</td><td><strong>${order.order_qty ?? '-'}</strong></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -168,59 +168,120 @@ function renderOrders(item) {
 
 function renderRFQ(item) {
     let html = '';
-    item.rfq?.forEach(rfq=>{
+
+    item.rfq?.forEach(rfq => {
         let orders = rfq.orders ?? [];
-        html += `<div class="row border rounded p-1 mb-1 bg-light align-items-start" style="font-size:13px;">`;
+        if (!orders.length && rfq.rfq_closed === "Closed") return;
+        if (orders.length) {
 
-        // RFQ
-        html += `<div class="col-md-3 col-12 mb-1">
-            <div class="border rounded p-1 bg-white">
-                <table class="table table-bordered table-sm text-center mb-0 text-nowrap" style="margin-bottom:0; font-size:13px;">
-                    <thead class="table-primary"><tr><th>RFQ Date</th><th>RFQ Qty</th></tr></thead>
-                    <tbody><tr><td>${rfq.rfq_date??'-'}</td><td><strong>${rfq.rfq_qty??'-'}</strong>${rfq.rfq_closed==="Closed"?" [ Closed ]":""}</td></tr></tbody>
-                </table>
-            </div>
-        </div>`;
+            orders.forEach((order, index) => {
 
-        // ORDER
-        let order = orders[0] ?? null;
-        if(order){
-            html += `<div class="col-md-3 col-12 mb-1">
-                <div class="border rounded p-1 bg-white">
-                    <table class="table table-bordered table-sm text-center mb-0 text-nowrap" style="margin-bottom:0; font-size:13px;">
-                        <thead class="table-primary"><tr><th>Order Date</th><th>Order Qty</th></tr></thead>
-                        <tbody><tr><td>${order.order_date??'-'}</td><td><strong>${order.order_qty??'-'}</strong> [ ${order.order_status} ]</td></tr></tbody>
-                    </table>
-                </div>
-            </div>`;
+                html += `<div class="row border rounded p-1 mb-1 bg-light align-items-start" style="font-size:13px;overflow-x: auto;">`;
+
+                //  RFQ (only first row)
+                if (index === 0) {
+                    html += `<div class="col-md-3 col-12 mb-1">
+                        <div class="border rounded p-1 bg-white">
+                            <table class="table table-bordered table-sm text-center mb-0 text-nowrap">
+                                <thead class="table-primary">
+                                    <tr><th>RFQ Date</th><th>RFQ Qty</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>${rfq.rfq_date ?? '-'}</td>
+                                        <td>
+                                            <strong>${rfq.rfq_qty ?? '-'}</strong>
+                                            ${rfq.rfq_closed === "Closed" ? " [ Closed ]" : ""}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`;
+                } else {
+                    //  Empty space for alignment
+                    html += `<div class="col-md-3 col-12 mb-1"></div>`;
+                }
+
+                //  ORDER
+                html += `<div class="col-md-3 col-12 mb-1">
+                    <div class="border rounded p-1 bg-white">
+                        <table class="table table-bordered table-sm text-center mb-0 text-nowrap">
+                            <thead class="table-primary">
+                                <tr><th>Order Date</th><th>Order Qty</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>${order.order_date ?? '-'}</td>
+                                    <td>
+                                        <strong>${order.order_qty ?? '-'}</strong>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>`;
+
+                //  GRN / ISSUE / CONSUME
+                ['grn', 'issue', 'consume'].forEach(type => {
+                    let data = order?.[type] ?? [];
+                    let title = type.toUpperCase();
+
+                    html += `<div class="col-md-2 col-12 mb-1">
+                        <div class="border rounded p-1 bg-white">
+                            ${
+                                data.length
+                                ? `<table class="table table-sm table-bordered mb-0 text-center text-nowrap">
+                                    <thead class="table-primary">
+                                        <tr><th>${title} Date</th><th>${title} Qty</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        ${data.map(d => `
+                                            <tr>
+                                                <td>${d.added_date ?? '-'}</td>
+                                                <td><strong>${d.qty ?? d.grn_qty ?? '-'}</strong></td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>`
+                                : `<div class="text-muted text-center">No ${title}</div>`
+                            }
+                        </div>
+                    </div>`;
+                });
+
+                html += `</div>`; // row end
+            });
+
         } else {
-            html += `<div class="col-md-3 col-12 mb-1">
-                <div class="border rounded p-1 bg-white d-flex align-items-center justify-content-center">
-                    <div class="text-muted text-center" style="font-size:13px;">No Order Found</div>
+            //  No order case
+            html += `<div class="row border rounded p-1 mb-1 bg-light align-items-start">
+                
+                <div class="col-md-3 col-12 mb-1">
+                    <div class="border rounded p-1 bg-white">
+                        <table class="table table-bordered table-sm text-center mb-0 text-nowrap">
+                            <thead class="table-primary">
+                                <tr><th>RFQ Date</th><th>RFQ Qty</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>${rfq.rfq_date ?? '-'}</td>
+                                    <td><strong>${rfq.rfq_qty ?? '-'}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+
+                <div class="col-md-9 col-12 d-flex align-items-center justify-content-center">
+                    <div class="text-muted">No Order Found</div>
+                </div>
+
             </div>`;
         }
-
-        ['grn','issue','consume'].forEach(type=>{
-            let data = order?.[type]??[];
-            let title = type.toUpperCase();
-            html += `<div class="col-md-2 col-12 mb-1">
-                <div class="border rounded p-1 bg-white">
-                    ${
-                        data.length
-                        ? `<table class="table table-sm table-bordered mb-0 text-center text-nowrap" style="margin-bottom:0; font-size:13px;">
-                            <thead class="table-primary"><tr><th>${title} Date</th><th>${title} Qty</th></tr></thead>
-                            <tbody>${data.map(d=>`<tr><td>${d.added_date??'-'}</td><td><strong>${d.qty??d.grn_qty??'-'}</strong></td></tr>`).join('')}</tbody>
-                        </table>`
-                        : `<div class="text-muted text-center" style="font-size:13px;">No ${title}</div>`
-                    }
-                </div>
-            </div>`;
-        });
-
-        html += `</div>`; // row end
     });
-    return html || `<div class="text-center text-muted" style="font-size:13px;">No Transaction Available</div>`;
+
+    return html || `<div class="text-center text-muted">No Transaction Available</div>`;
 }
 
 function renderIndentRFQ(item){

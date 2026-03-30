@@ -11,7 +11,7 @@ class ManualOrder extends Model
     protected $fillable = [
         'manual_po_number','currency_id', 'vendor_id', 'buyer_id', 'buyer_user_id',
         'order_status', 'order_price_basis', 'order_payment_term',
-        'order_delivery_period', 'order_remarks', 'order_add_remarks',
+        'order_delivery_period', 'order_remarks', 'order_add_remarks', 'is_approve',
         'prepared_by', 'approved_by', 'created_at',
     ];
     public function products(): HasMany

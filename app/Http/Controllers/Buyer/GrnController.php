@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Buyer\ManualPOController;
 use App\Http\Controllers\Buyer\InventoryController;
 use App\Models\{
-    ManualOrder,Grn,ManualOrderProduct,ReturnStock,User,Rfq,Inventories,OrderVariant,Order,Indent,RfqProductVariant,Issued,Tax,GetPass
+    ManualOrder,Grn,ManualOrderProduct,ReturnStock,User,Rfq,Inventories,OrderVariant,Order,Indent,RfqProductVariant,Issued,Tax,GetPass,GrnTolerance
 };
 use App\Helpers\{
     NumberFormatterHelper,TruncateWithTooltipHelper,PendingGrnUpdateBYrHelper
@@ -32,6 +32,8 @@ class GrnController extends Controller
             if (Auth::user()->parent_id != 0) {
                 $this->ensurePermission('GRN', 'add', '1');
             }
+            $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+            $grnTolerance = PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
             ManualPOController::userCurrency();
             $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
 
@@ -49,6 +51,7 @@ class GrnController extends Controller
             return response()->json([
                 'has_pending_order' => !empty($pendingOrderArray) || !empty($stockReturnOrderArray),
                 'order_details' => $pendingOrderArray,
+                'grn_tolerance' => $grnTolerance,
                 'stock_return_details' => $stockReturnOrderArray,
                 'inventoryId' => $inventoryId,
                 'order' => !empty($pendingOrderArray),
@@ -415,6 +418,7 @@ class GrnController extends Controller
     }
     public function closeIndent($inventoryId)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
         $indentQty = Indent::where('inventory_id', $inventoryId)
             ->where('is_deleted', 2)
             ->where('closed_indent', 2)
@@ -434,7 +438,7 @@ class GrnController extends Controller
         $inventoryController->preloadOrderData([$inventoryId]);
         $orderQty = $inventoryController->getOrderData($inventoryId)['order_qty'][$inventoryId] ?? 0;
         $inventoryController->clearAllCacheSilent([$inventoryId]);
-        $maxOrderQty = $orderQty * 1.02;
+        $maxOrderQty = $orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
 
         if (
             round($indentQty, 3) == round($totalGrnQty, 3) &&
@@ -462,7 +466,7 @@ class GrnController extends Controller
             ->select(
                 'order_variants.order_quantity',
                 'orders.id as order_id',
-                DB::raw('(order_variants.order_quantity * 1.02) as max_quantity')
+                DB::raw('(order_variants.order_quantity * ' . PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId) . ') as max_quantity')
             )
             ->get();
 
@@ -610,6 +614,7 @@ class GrnController extends Controller
     }
     protected function checkMaxQtyForRfqGrn($grnQtys, $inventoryId, $orderId)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
         $grnQtys = collect($grnQtys);
         $grns = Grn::where('inventory_id', $inventoryId)
             ->where('order_id', $orderId)
@@ -636,7 +641,7 @@ class GrnController extends Controller
             ->where('rfq_product_variant_id', $RfqProductVariantId)
             ->value('order_quantity') ?? 0;
 
-        $maxOrderQty = $orderQty * 1.02;
+        $maxOrderQty = $orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
         $maxGrnQty =  round($maxOrderQty - $totalGrnEntered, 3);
         $exceedsMaxQty = $grnQtys->filter(function($qty) use ($maxGrnQty) {
             return floatval($qty) > floatval($maxGrnQty);
@@ -650,6 +655,8 @@ class GrnController extends Controller
     }
     protected function checkMaxQtyForManualOrderGrn($grnQtys, $inventoryId, $orderId)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+
         $grnQtys = collect($grnQtys);
         $grns = Grn::where('inventory_id', $inventoryId)
         ->where('order_id', $orderId)
@@ -666,7 +673,7 @@ class GrnController extends Controller
         ->first();
 
         $orderQty = $manualOrderProduct?->product_quantity ?? 0;
-        $maxOrderQty = $orderQty * 1.02 ;
+        $maxOrderQty = $orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId) ;
         $maxGrnQty =  round($maxOrderQty - $totalGrnEntered, 3);
         $exceedsMaxQty = $grnQtys->filter(function($qty) use ($maxGrnQty) {
             return floatval($qty) > floatval($maxGrnQty);
@@ -680,6 +687,7 @@ class GrnController extends Controller
     }
     protected function checkMaxQtyForStockReturnGrn($grnQtys, $inventoryId, $stockId)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
         $grnQtys = collect($grnQtys);
         $grns = Grn::where('inventory_id', $inventoryId)
             ->where('stock_id', $stockId)
@@ -688,7 +696,7 @@ class GrnController extends Controller
 
         $totalGrnEntered = $grns->isEmpty() ? 0 : $grns->sum('grn_qty');
         $orderQty = ReturnStock::where('inventory_id', $inventoryId)->where('id', $stockId)->value('qty')?? 0;
-        $maxOrderQty = $orderQty * 1.02;
+        $maxOrderQty = $orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId) ;
         $maxGrnQty =  round($maxOrderQty - $totalGrnEntered, 3);
         $exceedsMaxQty = $grnQtys->filter(function($qty) use ($maxGrnQty) {
             return floatval($qty) > floatval($maxGrnQty);
@@ -703,7 +711,8 @@ class GrnController extends Controller
     protected function buildValidDataForOrderRow($request, $grnQtys, $inventoryId, $companyId, $userId, $nextGrnNumber)
     {
         $validData = [];
-
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+        //dd(PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId));
         $fields = ['invoice_number', 'bill_date', 'transporter_name', 'vehicle_lr_number', 'gross_weight', 'freight_charges', 'approved_by'];
 
         $length = count($request->grn_qty);
@@ -732,7 +741,8 @@ class GrnController extends Controller
             $grnQty = number_format(floatval($qty), 3, '.', '');
             $orderQty = number_format(floatval($request->order_qty[$index] ?? 0), 3, '.', '');
             $enteredQty = number_format(floatval($request->grn_entered[$index] ?? 0), 3, '.', '');
-            $remainingQty = number_format(($orderQty * 1.02) - $enteredQty, 3, '.', '');
+            $remainingQty = number_format(($orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId)) - $enteredQty, 3, '.', '');
+            //dd($orderQty, PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId), $enteredQty, $remainingQty);
             $orderId = $request->order_id[$index];
             $grnType = $request->grn_type[$index];
 
@@ -807,13 +817,13 @@ class GrnController extends Controller
     protected function buildValidDataForStockReturn($request, $grnStockReturnQtys, $inventoryId, $companyId, $userId, $nextGrnNumber)
     {
         $validData = [];
-
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
         foreach ($grnStockReturnQtys as $index => $qty) {
             $grnQty = number_format(floatval($qty), 3, '.', '');
             $orderQty = number_format(floatval($request->stock_return_qty[$index] ?? 0), 3, '.', '');
             $enteredQty = number_format(floatval($request->stock_return_grn_entered[$index] ?? 0), 3, '.', '');
 
-            $remainingQty = number_format(($orderQty * 1.02) - $enteredQty, 3, '.', '');
+            $remainingQty = number_format(($orderQty * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId)) - $enteredQty, 3, '.', '');
             $stock_id = $request->stock_return_id[$index];
             $stock_return_for = $request->stock_return_for[$index];
 
@@ -1125,6 +1135,7 @@ class GrnController extends Controller
         $total_gst = $grnModel->sum(function ($grn) {
                 return (float)$grn->gst_no;
             });
+        
         $grn = [
             //common fields
             'buyer_name' => $buyer?->buyer->legal_name ?? 'N/A',
@@ -1187,17 +1198,20 @@ class GrnController extends Controller
     {
         $grn_no=Grn::where('id',$id)->value('grn_no');
         $grnModel = Grn::with(['inventory.product', 'inventory.uom', 'manualOrder', 'manualOrderProduct', 'stock', 'order'])->where('grn_no', $grn_no)->where('company_id', Auth::user()->parent_id ?? Auth::id())->get();
-
+        
         if (!$grnModel->count()) {
             abort(404, 'GRN not found');
         }
         $total_amount = $grnModel->sum(function ($grn) {
                 return (float)$grn->order_rate * (float)$grn->grn_qty;
             });
-
-        $total_gst = $grnModel->sum(function ($grn) {
-                return (float)$grn->gst_no;
-            });
+        $total_amount_incl_gst = $grnModel->sum(function ($grn) {
+                $amount = (float)$grn->order_rate * (float)$grn->grn_qty;
+                $gst_amount = $amount * ((float)$grn->order_gst / 100);
+                return $amount + $gst_amount;
+            });    
+        
+        
         $buyerId  = $grnModel[0]->inventory->buyer_parent_id ?? null;
         $branchId = $grnModel[0]->inventory->buyer_branch_id ?? null;
 
@@ -1267,13 +1281,17 @@ class GrnController extends Controller
                     session('user_currency')['symbol'] ?? '₹'
                 ) ?? '',
                 'rate' => NumberFormatterHelper::formatCurrency($grn->order_rate, session('user_currency')['symbol'] ?? '₹') ?? '',
+                'gst' => $grn->order_gst,
                 'amount' => NumberFormatterHelper::formatCurrency($grn->order_rate * $grn->grn_qty, session('user_currency')['symbol'] ?? '₹') ?? '',
-                'gst_no' => NumberFormatterHelper::formatCurrency($grn->gst_no ?? '', session('user_currency')['symbol'] ?? '₹'),
+                'gst_amount' => NumberFormatterHelper::formatCurrency(($grn->order_rate * $grn->grn_qty)*($grn->order_gst/100) ?? '', session('user_currency')['symbol'] ?? '₹'),
+                'total_amount_gst' => NumberFormatterHelper::formatCurrency( ($grn->order_rate * $grn->grn_qty) + (($grn->order_rate * $grn->grn_qty)*($grn->order_gst/100) ), session('user_currency')['symbol'] ?? '₹') ?? '',
                 ];
+
             })->toArray(),
             'total_amount' => NumberFormatterHelper::formatCurrency($total_amount, session('user_currency')['symbol'] ?? '₹') ?? '',
-            'total_gst' => NumberFormatterHelper::formatCurrency($total_gst, session('user_currency')['symbol'] ?? '₹') ?? '',
+            'total_amount_incl_gst' => NumberFormatterHelper::formatCurrency($total_amount_incl_gst, session('user_currency')['symbol'] ?? '₹') ?? '',
         ];
+        //dd($grn);
         $pdf = Pdf::loadView('buyer.report.downloadGrnPdf', compact('grn'))
             ->setPaper('a4', 'landscape')
             ->setOptions([
@@ -1769,7 +1787,7 @@ class GrnController extends Controller
 
         ManualPOController::userCurrency();
         $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
-
+        $grnTolerance = PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
         $pendingOrderArray = [];
 
         foreach ($inventoryIds as $index => $inventoryId) {
@@ -1792,11 +1810,15 @@ class GrnController extends Controller
             } elseif (!is_array($pendingOrders)) {
                 $pendingOrders = [];
             }
+            
 
             $pendingOrderArray = array_merge($pendingOrderArray, $pendingOrders);
         }
 
-        return response()->json($pendingOrderArray);
+        return response()->json([
+            'orders' => $pendingOrderArray,
+            'grnTolerance' => $grnTolerance
+        ]);
     }
 
     public function storeFromPendingGRN(Request $request)

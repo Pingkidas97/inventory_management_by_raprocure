@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Models\Grn;
+use Illuminate\Support\Facades\DB;
 
 class PendingGrnUpdateBYrHelper
 {
@@ -37,5 +38,14 @@ class PendingGrnUpdateBYrHelper
         return $map;
     }
 
+    public static function getBuyerTolerance($buyerId)
+    {
+        $tolerance = DB::table('grn_tolerance')
+            ->where('buyer_id', $buyerId)
+            ->value('tolerance');
+        
+        // fallback if not found
+        return $tolerance ? (1 + ($tolerance / 100)) : 1.02;
+    }
 
 }

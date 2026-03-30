@@ -26,6 +26,7 @@ use App\Http\Controllers\Buyer\IssueReturnController;
 use App\Http\Controllers\Buyer\StockReturnController;
 use App\Http\Controllers\Buyer\ProductLifeCycleController;
 use App\Http\Controllers\Buyer\InventoryPermissionCheckController;
+use App\Http\Controllers\Buyer\GrnToleranceController;
 use App\Services\ExportService;
 //end inventory section
 use App\Http\Controllers\Buyer\SearchProductController;
@@ -204,6 +205,7 @@ Route::name('buyer.')->group(function() {
                     Route::post('/store', [ManualPOController::class,'store'])->name('store');
                     Route::get('/searchVendorByVendorname', [ManualPOController::class,'searchVendorByVendorname'])->name('search.vendors');
                     Route::get('/getVendorDetailsByName', [ManualPOController::class,'getVendorDetailsByName'])->name('get.vendordetails');
+                    Route::post('/approveManualPO', [ManualPoController::class, 'approveManualPO'])->name('approveManualPO');
                 });
                 // Force Closure
                 Route::prefix('forceClosure')->name('forceClosure.')->group(function () {
@@ -221,6 +223,11 @@ Route::name('buyer.')->group(function() {
                     Route::get('/getissuedto', [IssuedController::class,'getissuedto'])->name('getissuedto');
                     Route::post('/save-issue-to', [IssuedController::class,'saveIssueTo'])->name('save');
                     Route::post('/delete-issue-to', [IssuedController::class,'deleteIssueTo'])->name('delete');
+                });
+
+                Route::prefix('grn_tolerance')->name('grntolerance.')->group(function () {
+                    Route::get('/get', [GrnToleranceController::class, 'get'])->name('get');
+                    Route::post('/save', [GrnToleranceController::class, 'save'])->name('save');
                 });
 
                 //Issue

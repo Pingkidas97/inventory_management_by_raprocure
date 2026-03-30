@@ -15,15 +15,13 @@ use App\Models\RfqProductVariant;
 use App\Models\ForceClosure;
 use Illuminate\Support\Facades\Auth;
 use App\Helpers\NumberFormatterHelper;
-use App\Traits\TrimFields;
-use App\Traits\HasModulePermission;
-
+use Illuminate\Support\Facades\Log;
+use App\Helpers\PendingGrnUpdateBYrHelper;
 use DB;
 
 class ForceClosureController extends Controller
 {
-    use TrimFields;
-    use HasModulePermission;
+
     public function fetchInventoryDetails(Request $request)
     {
         if (Auth::user()->parent_id != 0) {
@@ -123,8 +121,11 @@ class ForceClosureController extends Controller
         ]);
     }  
 
+
     private function calculateForceClosureData($inventoryId, $rfqNumber, $variant = null)
     {
+        $buyerId = (Auth::user()->parent_id != 0) ? Auth::user()->parent_id : Auth::user()->id;
+
         if (!$variant) {
             $variant = RfqProductVariant::where('rfq_id', $rfqNumber)
                 ->where('inventory_id', $inventoryId)
@@ -181,7 +182,7 @@ class ForceClosureController extends Controller
         $forceClosure = false;
 
         if ($valid && $totalOrder < $rfqQty && $totalOrder > 0 && $totalGrn > 0) {
-            $maxRange = $totalOrder * 1.02;
+            $maxRange = $totalOrder * PendingGrnUpdateBYrHelper::getBuyerTolerance($buyerId);
             $forceClosure = ($totalGrn >= $totalOrder && $totalGrn <= $maxRange);
             $isEligible = true;
         }
@@ -211,7 +212,7 @@ class ForceClosureController extends Controller
         ]);
 
         try {
-
+             Log::error("message one");
             $buyerId = auth()->id();
             $buyerParentId = auth()->user()->parent_id != 0
                 ? auth()->user()->parent_id
@@ -254,7 +255,7 @@ class ForceClosureController extends Controller
                     'message' => 'Unapproved order exists. Please cancel or confirm the order before proceeding with force closure.'
                 ], 400);
             }
-
+            Log::error("message 2");
             //  Common calculation
             $data = $this->calculateForceClosureData(
                 $request->inventory_id,
@@ -282,7 +283,7 @@ class ForceClosureController extends Controller
                     'message' => 'GRN quantity does not meet the force closure condition.'
                 ], 400);
             }
-
+            Log::error("message thee");
             // Transaction start
             DB::beginTransaction();
 
@@ -310,7 +311,7 @@ class ForceClosureController extends Controller
                 $variant->rfq_id,
                 $inventory
             );
-
+            Log::error("message 4");
             //  Update indent
             $this->updateIndent($inventory, $variant->rfq_id);
 
@@ -320,18 +321,19 @@ class ForceClosureController extends Controller
             DB::commit();
 
             //  RFQ status update
-            $evaluated = $this->reEvaluateRFQVendorsStatus($request->rfq_id);
-
+            $evaluated = $this->reEvaluateRFQVendorsStatus($request->rfq_number);
+           
+            Log::error("message", ['evaluated_data' => $evaluated]);
             $buyer_rfq_status = ($evaluated['is_rfq_qty_left'] == "yes") ? 9 : 5;
 
             DB::table('rfqs')
-                ->where('rfq_id', $request->rfq_id)
+                ->where('rfq_id', $request->rfq_number)
                 ->update(['buyer_rfq_status' => $buyer_rfq_status]);
 
             if (!empty($evaluated['update_vendor_rfq_status_wise'])) {
                 foreach ($evaluated['update_vendor_rfq_status_wise'] as $status => $vendors) {
                     DB::table("rfq_vendors")
-                        ->where('rfq_id', $request->rfq_id)
+                        ->where('rfq_id', $request->rfq_number)
                         ->whereIn('vendor_user_id', array_values($vendors))
                         ->update(['vendor_status' => $status]);
                 }
